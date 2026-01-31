@@ -1,0 +1,18 @@
+{
+  "name": "@facilitator/server",
+  "version": "0.0.1",
+  "description": "x402 payment facilitator server using EIP-7702 delegated transactions",
+  "module": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun --hot src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@x402/core": "^2.2.0",
+    "viem": "^2.45.1"
+  },
+  "license": "MIT"
+}

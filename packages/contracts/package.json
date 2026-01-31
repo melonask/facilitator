@@ -1,0 +1,7 @@
+{
+  "name": "@facilitator/contracts",
+  "version": "0.0.1",
+  "description": "EIP-7702 Delegate contract for x402 gasless payment intents",
+  "private": true,
+  "license": "MIT"
+}

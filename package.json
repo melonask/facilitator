@@ -1,0 +1,21 @@
+{
+  "name": "facilitator-monorepo",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/server",
+    "packages/agents"
+  ],
+  "scripts": {
+    "test": "bun run --filter '*' test",
+    "typecheck": "bun run --filter '*' typecheck",
+    "test:contracts": "cd packages/contracts && forge test -vv",
+    "build:contracts": "cd packages/contracts && forge build",
+    "demo": "bun run packages/agents/src/demo.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  }
+}

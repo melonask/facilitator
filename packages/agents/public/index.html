@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>x402 Agent Economy</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>x402 // AGENT_ECONOMY_VISUALIZER</h1>
+            <div class="status-badge">SYSTEM_ONLINE</div>
+        </header>
+
+        <main>
+            <div class="network-grid">
+                <!-- Agent 2: Buyer (Left) -->
+                <div class="agent-card" id="agent-buyer">
+                    <div class="agent-header">
+                        <div class="agent-icon buyer-icon"></div>
+                        <h2>AGENT_02 [BUYER]</h2>
+                    </div>
+                    <div class="agent-role">CONSUMER_CLIENT</div>
+
+                    <div class="stats-container">
+                        <div class="stat-box">
+                            <label>ETH</label>
+                            <span class="value eth-value">0.00</span>
+                        </div>
+                        <div class="stat-box">
+                            <label>TOKENS</label>
+                            <span class="value token-value">0.00</span>
+                        </div>
+                    </div>
+                    <div class="status-indicator">IDLE</div>
+                    
+                    <!-- Action Badge -->
+                    <div class="action-badge hidden">SIGNING...</div>
+
+                    <!-- Weather Widget (Hidden by default) -->
+                    <div class="weather-widget" id="weather-display">
+                        <div class="weather-icon">
+                            <!-- SVG Sun (Default) -->
+                            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="5"></circle>
+                                <line x1="12" y1="1" x2="12" y2="3"></line>
+                                <line x1="12" y1="21" x2="12" y2="23"></line>
+                                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                                <line x1="1" y1="12" x2="3" y2="12"></line>
+                                <line x1="21" y1="12" x2="23" y2="12"></line>
+                                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                            </svg>
+                        </div>
+                        <div class="weather-info">
+                            <div class="weather-temp">--°C</div>
+                            <div class="weather-loc">WAITING FOR DATA</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Facilitator (Center) -->
+                <div class="facilitator-zone">
+                    <div class="connection-lines">
+                        <svg width="100%" height="100%" viewBox="0 0 400 300" preserveAspectRatio="none">
+                            <!-- Paths -->
+                            <!-- Buyer to Seller (Direct HTTP) -->
+                            <path id="path-buyer-seller" d="M 0 150 L 400 150" stroke="#222" stroke-width="1" stroke-dasharray="5,5" fill="none" />
+                            
+                            <!-- Seller to Facilitator -->
+                            <path id="path-seller-fac" d="M 350 150 C 350 150, 200 150, 200 150" stroke="#333" stroke-width="2" fill="none" opacity="0" />
+                            
+                            <!-- Packets -->
+                            <circle class="packet" id="packet-http" r="4" fill="#66fcf1" opacity="0" />
+                            <circle class="packet" id="packet-settle" r="4" fill="#feb236" opacity="0" />
+                        </svg>
+                    </div>
+
+                    <!-- Workflow Steps Visualizer -->
+                    <div class="workflow-steps">
+                        <div class="step" id="step-1">1. REQUEST (402)</div>
+                        <div class="step" id="step-2">2. SIGN (712/7702)</div>
+                        <div class="step" id="step-3">3. SETTLE (CHAIN)</div>
+                        <div class="step" id="step-4">4. DELIVER DATA</div>
+                    </div>
+
+                    <div class="facilitator-card" id="agent-facilitator">
+                        <div class="facilitator-core">
+                            <div class="core-inner"></div>
+                        </div>
+                        <h2>FACILITATOR</h2>
+                        <div class="agent-role">EIP-7702 RELAYER</div>
+                        <div class="stat-box compact">
+                            <label>GAS TANK (ETH)</label>
+                            <span class="value eth-value">0.00</span>
+                        </div>
+                         <div class="status-indicator">READY</div>
+                         <div class="blockchain-status hidden">TX PENDING...</div>
+                    </div>
+                    
+                    <button id="start-btn" class="cyber-button">
+                        <span class="btn-text">INITIATE TRANSACTION</span>
+                    </button>
+                </div>
+
+                <!-- Agent 1: Seller (Right) -->
+                <div class="agent-card" id="agent-seller">
+                    <div class="agent-header">
+                        <div class="agent-icon seller-icon"></div>
+                        <h2>AGENT_01 [SELLER]</h2>
+                    </div>
+                    <div class="agent-role">WEATHER_DATA_PROVIDER</div>
+                    
+                    <div class="stats-container">
+                        <div class="stat-box">
+                            <label>ETH</label>
+                            <span class="value eth-value">0.00</span>
+                        </div>
+                        <div class="stat-box">
+                            <label>TOKENS</label>
+                            <span class="value token-value">0.00</span>
+                        </div>
+                    </div>
+                    <div class="status-indicator">LISTENING</div>
+                    
+                    <!-- Action Badge -->
+                    <div class="action-badge hidden">VERIFYING...</div>
+                </div>
+            </div>
+
+            <!-- Logs Console -->
+            <div class="console-wrapper">
+                <div class="console-header">
+                    <h3>SYSTEM_LOGS</h3>
+                    <div class="console-controls">
+                        <span class="dot"></span>
+                    </div>
+                </div>
+                <div class="console-output" id="logs-container">
+                    <div class="log-entry system">[SYSTEM] Connecting to visualizer uplink...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

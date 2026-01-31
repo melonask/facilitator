@@ -1,0 +1,16 @@
+{
+  "name": "@facilitator/agents",
+  "version": "0.0.1",
+  "description": "Demo seller and buyer agents for the x402 EIP-7702 agent economy",
+  "type": "module",
+  "scripts": {
+    "demo": "bun run src/demo.ts",
+    "setup": "bun run src/setup-chain.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "viem": "^2.45.1"
+  },
+  "license": "MIT"
+}
