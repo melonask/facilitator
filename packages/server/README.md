@@ -36,19 +36,49 @@ The facilitator verifies both signatures off-chain, then submits a single Type 4
 ```sh
 bun install
 
-# Set required environment variables
+# Using environment variables
 export RELAYER_PRIVATE_KEY="0x..."
 export DELEGATE_ADDRESS="0x..."
 export RPC_URL_31337="http://127.0.0.1:8545"
-
-# Start the server
 bun run start
 
-# Or with hot-reload for development
+# Or pass everything via CLI flags
+bunx @facilitator/server \
+  --relayer-private-key 0x... \
+  --delegate-address 0x... \
+  --rpc-url 31337=http://127.0.0.1:8545
+
+# Mix and match — CLI flags override env vars
+export RELAYER_PRIVATE_KEY="0x..."
+bunx @facilitator/server --port 8080 --delegate-address 0x...
+
+# Hot-reload for development
 bun run dev
 ```
 
-The server starts on port `3000` by default. Override with the `PORT` environment variable.
+The server starts on `0.0.0.0:3000` by default. Override with CLI flags or environment variables.
+
+## CLI Options
+
+```
+Usage: facilitator-server [options]
+
+Options:
+  -p, --port <port>              Server port (default: 3000, env: PORT)
+  -H, --host <host>              Server hostname (default: "0.0.0.0", env: HOST)
+      --relayer-private-key <key>        Relayer private key (env: RELAYER_PRIVATE_KEY)
+      --delegate-address <addr>  Delegate contract address (env: DELEGATE_ADDRESS)
+      --rpc-url <chainId=url>    RPC endpoint, repeatable (env: RPC_URL_<chainId>)
+  -h, --help                     Show this help message
+```
+
+CLI flags take precedence over environment variables. The `--rpc-url` flag can be repeated for multiple chains:
+
+```sh
+bunx @facilitator/server \
+  --rpc-url 1=https://eth.rpc.io \
+  --rpc-url 8453=https://base.rpc.io
+```
 
 ## Environment Variables
 
@@ -58,6 +88,7 @@ The server starts on port `3000` by default. Override with the `PORT` environmen
 | `DELEGATE_ADDRESS`    | Yes      | Address of the deployed `Delegate` contract               |
 | `RPC_URL_<chainId>`   | Yes      | RPC endpoint per chain (e.g. `RPC_URL_1`, `RPC_URL_8453`) |
 | `PORT`                | No       | Server port (default: `3000`)                             |
+| `HOST`                | No       | Server hostname (default: `"0.0.0.0"`)                    |
 
 ## API
 

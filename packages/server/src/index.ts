@@ -1,7 +1,4 @@
-import { DELEGATE_CONTRACT_ADDRESS, relayerAccount, getClients } from "./config";
-import { formatEther } from "viem";
-import { mechanism } from "./mechanism";
-import { bazaarManager } from "./storage";
+import { parseArgs } from "util";
 import type {
   DiscoveryResponse,
   SettleRequest,
@@ -11,7 +8,59 @@ import type {
   VerifyResponse,
 } from "./types";
 
-const PORT = Number(process.env.PORT) || 3000;
+const { values: args } = parseArgs({
+  args: Bun.argv.slice(2),
+  options: {
+    port: { type: "string", short: "p" },
+    host: { type: "string", short: "H" },
+    "relayer-private-key": { type: "string" },
+    "delegate-address": { type: "string" },
+    "rpc-url": { type: "string", multiple: true },
+    help: { type: "boolean", short: "h" },
+  },
+  strict: false,
+});
+
+if (args.help) {
+  console.log(`Usage: facilitator-server [options]
+
+Options:
+  -p, --port <port>              Server port (default: 3000, env: PORT)
+  -H, --host <host>              Server hostname (default: "0.0.0.0", env: HOST)
+      --relayer-private-key <key>  Relayer private key (env: RELAYER_PRIVATE_KEY)
+      --delegate-address <addr>  Delegate contract address (env: DELEGATE_ADDRESS)
+      --rpc-url <chainId=url>    RPC endpoint, repeatable (env: RPC_URL_<chainId>)
+  -h, --help                     Show this help message
+
+Examples:
+  facilitator-server --port 8080
+  facilitator-server --relayer-private-key 0x... --delegate-address 0x... --rpc-url 1=https://eth.rpc.io
+  facilitator-server --rpc-url 1=https://eth.rpc.io --rpc-url 8453=https://base.rpc.io`);
+  process.exit(0);
+}
+
+// Apply CLI args to process.env before config module reads them
+if (args["relayer-private-key"]) process.env.RELAYER_PRIVATE_KEY = args["relayer-private-key"] as string;
+if (args["delegate-address"]) process.env.DELEGATE_ADDRESS = args["delegate-address"] as string;
+if (args["rpc-url"]) {
+  for (const entry of args["rpc-url"] as string[]) {
+    const eq = entry.indexOf("=");
+    if (eq === -1) {
+      console.error(`Invalid --rpc-url format: "${entry}" (expected chainId=url)`);
+      process.exit(1);
+    }
+    process.env[`RPC_URL_${entry.slice(0, eq)}`] = entry.slice(eq + 1);
+  }
+}
+
+const PORT = Number(args.port ?? process.env.PORT) || 3000;
+const HOST = (args.host as string) ?? process.env.HOST ?? "0.0.0.0";
+
+// Import after env is populated from CLI args
+const { DELEGATE_CONTRACT_ADDRESS, relayerAccount, getClients } = await import("./config");
+const { formatEther } = await import("viem");
+const { mechanism } = await import("./mechanism");
+const { bazaarManager } = await import("./storage");
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -115,6 +164,7 @@ async function handleBalance() {
 
 Bun.serve({
   port: PORT,
+  hostname: HOST,
   async fetch(req) {
     if (req.method === "OPTIONS") {
       return new Response(null, { headers: CORS_HEADERS });
@@ -144,4 +194,4 @@ Bun.serve({
   },
 });
 
-console.log(`x402 EIP-7702 Facilitator running on port ${PORT}`);
+console.log(`x402 EIP-7702 Facilitator running on ${HOST}:${PORT}`);

@@ -1,5 +1,7 @@
 # x402 Facilitator (EIP-7702)
 
+<img src="scr.png">
+
 A self-hosted **x402 payment facilitator** that enables **any ERC-20 token** (including USDT) for HTTP 402 payments using EIP-7702 delegated transactions. Compatible with the [`@x402`](https://www.x402.org/) protocol and designed as a drop-in alternative to third-party facilitator services like Coinbase's.
 
 ```
@@ -84,67 +86,34 @@ packages/
 
 ## Quick Start
 
-```sh
-# Install workspace dependencies
-bun install
+### Run Your Own Facilitator
 
-# Run the full demo — deploys contracts, starts all services, executes a purchase
+```sh
+# Start the server (all config via CLI flags)
+bunx @facilitator/server \
+  --relayer-private-key 0x... \
+  --delegate-address 0x... \
+  --rpc-url 1=https://eth.llamarpc.com \
+  --rpc-url 8453=https://mainnet.base.org \
+  --port 3000
+
+# Or use environment variables
+export RELAYER_PRIVATE_KEY="0x..."
+export DELEGATE_ADDRESS="0x..."
+export RPC_URL_1="https://eth.llamarpc.com"
+bunx @facilitator/server
+```
+
+See [`packages/server`](packages/server/README.md) for the full CLI reference and API docs.
+
+### Run the Demo
+
+```sh
+bun install
 bun run demo
 ```
 
 The demo orchestrates everything: Anvil blockchain, contract deployment, facilitator server, seller agent, and buyer agent. A web UI opens at `http://localhost:8080` after the first successful purchase.
-
-## Manual Setup
-
-### 1. Start Local Blockchain
-
-```sh
-anvil --port 8545
-```
-
-### 2. Deploy Contracts & Fund Accounts
-
-```sh
-cd packages/agents
-bun run setup
-```
-
-Outputs `DELEGATE_ADDRESS` and `TOKEN_ADDRESS` — copy these for the next steps.
-
-### 3. Start Facilitator
-
-```sh
-cd packages/server
-export RELAYER_PRIVATE_KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
-export DELEGATE_ADDRESS=<from step 2>
-export RPC_URL_31337=http://127.0.0.1:8545
-bun run start
-```
-
-### 4. Start Seller Agent
-
-```sh
-cd packages/agents
-export PORT=4000
-export FACILITATOR_URL=http://localhost:3000
-export SELLER_KEY=0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a
-export TOKEN_ADDRESS=<from step 2>
-export ANVIL_RPC=http://127.0.0.1:8545
-bun run src/weather-server.ts
-```
-
-### 5. Start Buyer Agent
-
-```sh
-cd packages/agents
-export PORT=4001
-export WEATHER_AGENT_URL=http://localhost:4000/weather
-export BUYER_KEY=0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6
-export DELEGATE_ADDRESS=<from step 2>
-export TOKEN_ADDRESS=<from step 2>
-export ANVIL_RPC=http://127.0.0.1:8545
-bun run src/buyer-server.ts
-```
 
 ## API Reference
 
@@ -158,13 +127,6 @@ bun run src/buyer-server.ts
 | `POST` | `/verify`              | Off-chain verification of a payment payload  |
 | `POST` | `/settle`              | Verify + submit transaction on-chain         |
 | `GET`  | `/balance`             | Relayer ETH balance (debug)                  |
-
-### Seller Agent Endpoints
-
-| Method | Endpoint   | Description                             |
-| ------ | ---------- | --------------------------------------- |
-| `GET`  | `/weather` | Protected resource — returns 402 or 200 |
-| `GET`  | `/balance` | Token and ETH balances (debug)          |
 
 ## Testing
 
@@ -184,7 +146,7 @@ bun run typecheck
 The facilitator supports any EVM chain. Add RPC endpoints via environment variables:
 
 ```sh
-export RPC_URL_8453=https://mainnet.base.org     # Base
+export RPC_URL_8453=https://mainnet.base.org      # Base
 export RPC_URL_1=https://eth.llamarpc.com         # Ethereum Mainnet
 export RPC_URL_42161=https://arb1.arbitrum.io/rpc # Arbitrum
 ```
