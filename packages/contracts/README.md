@@ -1,19 +1,74 @@
 # @facilitator/contracts
 
-Solidity smart contracts for the x402 EIP-7702 payment facilitator.
+Solidity smart contracts for the x402 EIP-7702 payment facilitator. The core contract is `Delegate.sol` — the delegation target that EOAs adopt via EIP-7702 to execute token transfers. Once set, the delegation persists across transactions.
+
+```
+  How EIP-7702 Delegation Works
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │                     Type 4 Transaction                      │
+  │                                                             │
+  │  authorization_list:                                        │
+  │    [{address: Delegate, chainId: 1, nonce: N, sig: ...}]   │
+  │                                                             │
+  │  to: buyer_eoa        (call target = buyer's own address)  │
+  │  data: transfer(intent, signature)                          │
+  │  from: relayer         (relayer pays gas)                   │
+  └─────────────────────────────────────────────────────────────┘
+                              │
+                              v
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Buyer's EOA (during tx execution)                          │
+  │                                                             │
+  │  code = Delegate.sol  (persists, via EIP-7702)             │
+  │                                                             │
+  │  1. Verify EIP-712 signature (ECDSA.recover)               │
+  │  2. Check deadline not expired                              │
+  │  3. Consume nonce (replay protection)                       │
+  │  4. SafeERC20.safeTransfer(token, to, amount)              │
+  │     ─── works with ALL ERC-20 tokens ───                   │
+  │     ─── including USDT (no bool return) ───                │
+  └─────────────────────────────────────────────────────────────┘
+```
 
 ## Contracts
 
 ### Delegate.sol
 
-The logic contract that EOAs delegate to via EIP-7702. It handles:
+| Function                                   | Description                                   |
+| ------------------------------------------ | --------------------------------------------- |
+| `transfer(PaymentIntent, signature)`       | ERC-20 transfer via EIP-712 signed intent     |
+| `transferEth(EthPaymentIntent, signature)` | Native ETH transfer via EIP-712 signed intent |
+| `invalidateNonce(nonce)`                   | Cancel a nonce to prevent future use          |
 
-- **ERC-20 transfers** (`transfer`) with EIP-712 signed `PaymentIntent`
-- **Native ETH transfers** (`transferEth`) with EIP-712 signed `EthPaymentIntent`
-- **Nonce invalidation** (`invalidateNonce`) for cancelling pending intents
-- **Replay protection** via per-nonce storage slots
+**Structs:**
 
-Uses OpenZeppelin's `SafeERC20` for non-standard token compatibility (USDT, etc.) and `ECDSA`/`EIP712` for signature verification.
+```solidity
+struct PaymentIntent {
+    address token;      // ERC-20 token address
+    uint256 amount;     // Transfer amount in wei
+    address to;         // Recipient address
+    uint256 nonce;      // Replay protection nonce
+    uint256 deadline;   // Unix timestamp expiry
+}
+
+struct EthPaymentIntent {
+    uint256 amount;     // ETH amount in wei
+    address to;         // Recipient address
+    uint256 nonce;      // Replay protection nonce
+    uint256 deadline;   // Unix timestamp expiry
+}
+```
+
+**Security features:**
+
+| Feature                | Implementation                                             |
+| ---------------------- | ---------------------------------------------------------- |
+| Signature verification | OpenZeppelin `ECDSA.recover` + EIP-712 domain separation   |
+| Replay protection      | Per-nonce storage slot (custom slot `0x27f372...`)         |
+| Deadline enforcement   | `block.timestamp <= deadline` check                        |
+| Non-standard tokens    | OpenZeppelin `SafeERC20.safeTransfer` (handles USDT, etc.) |
+| Domain binding         | `verifyingContract = msg.sender` (the delegating EOA)      |
 
 ## Prerequisites
 
@@ -42,7 +97,17 @@ forge test -vv
 
 ## Configuration
 
-The Foundry project targets the `prague` EVM version (required for EIP-7702 opcodes). See `foundry.toml` for full config.
+The project targets the **Prague EVM** version (required for EIP-7702 opcodes). See [`foundry.toml`](foundry.toml):
+
+```toml
+[profile.default]
+evm_version = "prague"
+```
+
+## Dependencies
+
+- [OpenZeppelin Contracts](https://github.com/OpenZeppelin/openzeppelin-contracts) — `ECDSA`, `EIP712`, `SafeERC20`
+- [forge-std](https://github.com/foundry-rs/forge-std) — Foundry test framework
 
 ## License
 

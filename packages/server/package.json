@@ -1,9 +1,33 @@
 {
   "name": "@facilitator/server",
-  "version": "0.0.1",
-  "description": "x402 payment facilitator server using EIP-7702 delegated transactions",
+  "version": "0.1.0",
+  "description": "Self-hosted x402 payment facilitator server — verifies and settles any ERC-20 token via EIP-7702",
   "module": "src/index.ts",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/melonask/facilitator",
+    "directory": "packages/server"
+  },
+  "homepage": "https://github.com/melonask/facilitator/tree/main/packages/server#readme",
+  "bugs": {
+    "url": "https://github.com/melonask/facilitator/issues"
+  },
+  "license": "MIT",
+  "author": "melonask",
+  "keywords": [
+    "x402",
+    "eip-7702",
+    "eip-712",
+    "facilitator",
+    "payment",
+    "erc20",
+    "usdt",
+    "gasless",
+    "relayer",
+    "blockchain",
+    "ethereum"
+  ],
   "scripts": {
     "start": "bun run src/index.ts",
     "dev": "bun --hot src/index.ts",
@@ -14,5 +38,15 @@
     "@x402/core": "^2.2.0",
     "viem": "^2.45.1"
   },
-  "license": "MIT"
+  "peerDependencies": {
+    "bun": ">=1.1.0"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "bun": ">=1.1.0"
+  }
 }

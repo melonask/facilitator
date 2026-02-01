@@ -1,0 +1,6 @@
+[test]
+
+# IMPORTANT: Run tests via `bun run test`, not bare `bun test`.
+# Bare `bun test` scans all directories including git submodules
+# (OpenZeppelin, forge-std) which contain Hardhat test files.
+# The package.json test script limits scanning to workspace packages.

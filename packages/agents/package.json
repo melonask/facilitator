@@ -1,8 +1,17 @@
 {
   "name": "@facilitator/agents",
-  "version": "0.0.1",
-  "description": "Demo seller and buyer agents for the x402 EIP-7702 agent economy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Demo seller and buyer agents for the x402 EIP-7702 facilitator",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/melonask/facilitator",
+    "directory": "packages/agents"
+  },
+  "homepage": "https://github.com/melonask/facilitator/tree/main/packages/agents#readme",
+  "license": "MIT",
+  "author": "melonask",
   "scripts": {
     "demo": "bun run src/demo.ts",
     "setup": "bun run src/setup-chain.ts",
@@ -11,6 +20,5 @@
   },
   "dependencies": {
     "viem": "^2.45.1"
-  },
-  "license": "MIT"
+  }
 }

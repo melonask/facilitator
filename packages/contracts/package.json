@@ -1,7 +1,14 @@
 {
   "name": "@facilitator/contracts",
-  "version": "0.0.1",
-  "description": "EIP-7702 Delegate contract for x402 gasless payment intents",
+  "version": "0.1.0",
   "private": true,
-  "license": "MIT"
+  "description": "EIP-7702 Delegate contract for x402 gasless payment intents",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/melonask/facilitator",
+    "directory": "packages/contracts"
+  },
+  "homepage": "https://github.com/melonask/facilitator/tree/main/packages/contracts#readme",
+  "license": "MIT",
+  "author": "melonask"
 }

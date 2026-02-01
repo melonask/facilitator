@@ -1,21 +1,35 @@
 {
-  "name": "facilitator-monorepo",
-  "version": "0.0.1",
+  "name": "facilitator",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
+  "description": "Self-hosted x402 payment facilitator using EIP-7702 — supports any ERC-20 token",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/melonask/facilitator"
+  },
+  "homepage": "https://github.com/melonask/facilitator#readme",
+  "bugs": {
+    "url": "https://github.com/melonask/facilitator/issues"
+  },
+  "license": "MIT",
+  "author": "melonask",
   "workspaces": [
     "packages/server",
     "packages/agents"
   ],
   "scripts": {
-    "test": "bun run --filter '*' test",
-    "typecheck": "bun run --filter '*' typecheck",
+    "test": "bun test packages/server packages/agents",
     "test:contracts": "cd packages/contracts && forge test -vv",
     "build:contracts": "cd packages/contracts && forge build",
+    "typecheck": "bun run --filter '*' typecheck",
     "demo": "bun run packages/agents/src/demo.ts"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "typescript": "^5"
+    "@types/bun": "^1.1.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
   }
 }
