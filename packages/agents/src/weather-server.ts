@@ -82,16 +82,40 @@ Bun.serve({
       try {
         const paymentPayload = JSON.parse(atob(signatureHeader));
         const requirements = createRequirements();
+        const requestBody = JSON.stringify({
+          paymentPayload,
+          paymentRequirements: requirements,
+        });
 
-        // 1. Settle (Verification happens implicitly in settle)
+        // 1. Verify
+        console.log("   [Agent 1] 🔍 Requesting Verification...");
+        const verifyRes = await fetch(`${FACILITATOR_URL}/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: requestBody,
+        });
+        const verifyData = (await verifyRes.json()) as any;
+
+        if (!verifyData.isValid) {
+          console.log(
+            "   [Agent 1] ❌ Verification Failed:",
+            verifyData.invalidReason,
+          );
+          return new Response(
+            JSON.stringify({ error: "Verification Failed", details: verifyData }),
+            { status: 402, headers: corsHeaders },
+          );
+        }
+        console.log(
+          `   [Agent 1] ✅ Verification Passed. Payer: ${verifyData.payer}`,
+        );
+
+        // 2. Settle
         console.log("   [Agent 1] 💸 Requesting Settlement...");
         const settleRes = await fetch(`${FACILITATOR_URL}/settle`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            paymentPayload,
-            paymentRequirements: requirements,
-          }),
+          body: requestBody,
         });
         const settleData = (await settleRes.json()) as any;
 

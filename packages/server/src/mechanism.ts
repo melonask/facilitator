@@ -140,9 +140,15 @@ export class Eip7702Mechanism {
     });
   }
 
-  async verify(
+  /**
+   * Shared verification logic.
+   * @param consumeNonce - if true, marks the nonce as used (for settlement).
+   *                       if false, only checks whether it has been used (read-only verify).
+   */
+  private async _verify(
     payload: PaymentPayload,
     reqs: PaymentRequirements,
+    consumeNonce: boolean,
   ): Promise<VerifyResponse> {
     try {
       const chainId = parseChainId(reqs.network);
@@ -174,8 +180,14 @@ export class Eip7702Mechanism {
       }
 
       // 4. Check nonce
-      if (!nonceManager.checkAndMark(intent.nonce.toString())) {
-        return { isValid: false, invalidReason: "Nonce Used" };
+      if (consumeNonce) {
+        if (!nonceManager.checkAndMark(intent.nonce.toString())) {
+          return { isValid: false, invalidReason: "Nonce Used" };
+        }
+      } else {
+        if (nonceManager.has(intent.nonce.toString())) {
+          return { isValid: false, invalidReason: "Nonce Used" };
+        }
       }
 
       // 5. Check balance
@@ -203,12 +215,22 @@ export class Eip7702Mechanism {
     }
   }
 
+  /**
+   * Read-only verification. Does not consume the nonce.
+   */
+  async verify(
+    payload: PaymentPayload,
+    reqs: PaymentRequirements,
+  ): Promise<VerifyResponse> {
+    return this._verify(payload, reqs, false);
+  }
+
   async settle(
     payload: PaymentPayload,
     reqs: PaymentRequirements,
   ): Promise<SettleResponse> {
     try {
-      const verification = await this.verify(payload, reqs);
+      const verification = await this._verify(payload, reqs, true);
       if (!verification.isValid) throw new Error(verification.invalidReason);
 
       const chainId = parseChainId(reqs.network);

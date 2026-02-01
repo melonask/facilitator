@@ -47,6 +47,9 @@ let weatherServerProcess: any;
 let delegateAddress: Hex;
 let tokenAddress: Hex;
 
+const agentsDir = new URL("../", import.meta.url).pathname;
+const serverDir = new URL("../../server/", import.meta.url).pathname;
+
 describe("x402 Agent Economy", () => {
   beforeAll(async () => {
     console.log("🚀 Starting Infrastructure...");
@@ -98,8 +101,9 @@ describe("x402 Agent Economy", () => {
 
     // 4. Start Facilitator
     facilitatorProcess = Bun.spawn(
-      ["bun", "run", "../../packages/server/src/index.ts"],
+      [process.execPath, "run", "src/index.ts"],
       {
+        cwd: serverDir,
         env: {
           ...process.env,
           PORT: String(FACILITATOR_PORT),
@@ -114,7 +118,8 @@ describe("x402 Agent Economy", () => {
     await new Promise((r) => setTimeout(r, 2000));
 
     // 5. Start Weather Agent (Server)
-    weatherServerProcess = Bun.spawn(["bun", "run", "src/weather-server.ts"], {
+    weatherServerProcess = Bun.spawn([process.execPath, "run", "src/weather-server.ts"], {
+      cwd: agentsDir,
       env: {
         ...process.env,
         PORT: String(WEATHER_PORT),
@@ -140,7 +145,8 @@ describe("x402 Agent Economy", () => {
     // Run the consumer client script
     console.log("🏃 Running Consumer Client...");
 
-    const proc = Bun.spawn(["bun", "run", "src/consumer-client.ts"], {
+    const proc = Bun.spawn([process.execPath, "run", "src/consumer-client.ts"], {
+      cwd: agentsDir,
       env: {
         ...process.env,
         WEATHER_AGENT_URL: `http://localhost:${WEATHER_PORT}/weather`,

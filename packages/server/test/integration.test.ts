@@ -93,7 +93,9 @@ describe("x402 EIP-7702 Integration", () => {
     });
 
     console.log("Starting Server...");
-    serverProcess = Bun.spawn(["bun", "run", "src/index.ts"], {
+    const serverDir = new URL("../", import.meta.url).pathname;
+    serverProcess = Bun.spawn([process.execPath, "run", "src/index.ts"], {
+      cwd: serverDir,
       env: {
         ...process.env,
         PORT: String(SERVER_PORT),
