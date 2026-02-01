@@ -1,149 +1,271 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>x402 Agent Economy</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
     <div class="container">
-        <header>
-            <h1>x402 // AGENT_ECONOMY_VISUALIZER</h1>
-            <div class="status-badge">SYSTEM_ONLINE</div>
-        </header>
+      <header>
+        <div class="header-left">
+          <h1>x402 <span class="dim">//</span> EIP-7702 FACILITATOR</h1>
+          <span class="header-sub"
+            >Self-hosted payment settlement for any ERC-20</span
+          >
+        </div>
+        <div class="header-right">
+          <div class="status-badge" id="system-status">ONLINE</div>
+        </div>
+      </header>
 
-        <main>
-            <div class="network-grid">
-                <!-- Agent 2: Buyer (Left) -->
-                <div class="agent-card" id="agent-buyer">
-                    <div class="agent-header">
-                        <div class="agent-icon buyer-icon"></div>
-                        <h2>AGENT_02 [BUYER]</h2>
-                    </div>
-                    <div class="agent-role">CONSUMER_CLIENT</div>
+      <main>
+        <!-- Protocol Timeline -->
+        <div class="timeline-bar">
+          <div
+            class="timeline-step"
+            id="ts-1"
+            data-tooltip="Buyer requests a paid resource from the Seller API"
+          >
+            <div class="ts-num">1</div>
+            <div class="ts-label">REQUEST</div>
+            <div class="ts-detail">GET /weather</div>
+          </div>
+          <div class="timeline-connector"></div>
+          <div
+            class="timeline-step"
+            id="ts-2"
+            data-tooltip="Seller responds with HTTP 402 and payment requirements in headers"
+          >
+            <div class="ts-num">2</div>
+            <div class="ts-label">402 RESPONSE</div>
+            <div class="ts-detail">PAYMENT-REQUIRED</div>
+          </div>
+          <div class="timeline-connector"></div>
+          <div
+            class="timeline-step"
+            id="ts-3"
+            data-tooltip="Buyer signs EIP-712 PaymentIntent (what to pay) and EIP-7702 Authorization (delegate EOA to Delegate.sol)"
+          >
+            <div class="ts-num">3</div>
+            <div class="ts-label">SIGN</div>
+            <div class="ts-detail">EIP-712 + EIP-7702</div>
+          </div>
+          <div class="timeline-connector"></div>
+          <div
+            class="timeline-step"
+            id="ts-4"
+            data-tooltip="Buyer retries the request with the signed payment in the PAYMENT-SIGNATURE header"
+          >
+            <div class="ts-num">4</div>
+            <div class="ts-label">RETRY</div>
+            <div class="ts-detail">+ PAYMENT-SIGNATURE</div>
+          </div>
+          <div class="timeline-connector"></div>
+          <div
+            class="timeline-step"
+            id="ts-5"
+            data-tooltip="Seller forwards the payment to the Facilitator. First POST /verify (read-only checks), then POST /settle (consumes nonce + submits Type 4 tx on-chain)"
+          >
+            <div class="ts-num">5</div>
+            <div class="ts-label">VERIFY + SETTLE</div>
+            <div class="ts-detail">Facilitator -> Chain</div>
+          </div>
+          <div class="timeline-connector"></div>
+          <div
+            class="timeline-step"
+            id="ts-6"
+            data-tooltip="Tokens transferred on-chain via EIP-7702 delegation. Seller delivers the paid data to Buyer."
+          >
+            <div class="ts-num">6</div>
+            <div class="ts-label">DELIVER</div>
+            <div class="ts-detail">200 + Data</div>
+          </div>
+        </div>
 
-                    <div class="stats-container">
-                        <div class="stat-box">
-                            <label>ETH</label>
-                            <span class="value eth-value">0.00</span>
-                        </div>
-                        <div class="stat-box">
-                            <label>TOKENS</label>
-                            <span class="value token-value">0.00</span>
-                        </div>
-                    </div>
-                    <div class="status-indicator">IDLE</div>
-                    
-                    <!-- Action Badge -->
-                    <div class="action-badge hidden">SIGNING...</div>
+        <!-- Agent Network -->
+        <div class="network">
+          <!-- Buyer Card -->
+          <div class="node" id="node-buyer">
+            <div class="node-header">
+              <div class="node-dot buyer-dot"></div>
+              <div class="node-title">BUYER AGENT</div>
+            </div>
+            <div class="node-role">Autonomous Consumer</div>
+            <div class="node-address" id="buyer-addr">0x8626...67eB</div>
 
-                    <!-- Weather Widget (Hidden by default) -->
-                    <div class="weather-widget" id="weather-display">
-                        <div class="weather-icon">
-                            <!-- SVG Sun (Default) -->
-                            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="5"></circle>
-                                <line x1="12" y1="1" x2="12" y2="3"></line>
-                                <line x1="12" y1="21" x2="12" y2="23"></line>
-                                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-                                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-                                <line x1="1" y1="12" x2="3" y2="12"></line>
-                                <line x1="21" y1="12" x2="23" y2="12"></line>
-                                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-                                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-                            </svg>
-                        </div>
-                        <div class="weather-info">
-                            <div class="weather-temp">--°C</div>
-                            <div class="weather-loc">WAITING FOR DATA</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Facilitator (Center) -->
-                <div class="facilitator-zone">
-                    <div class="connection-lines">
-                        <svg width="100%" height="100%" viewBox="0 0 400 300" preserveAspectRatio="none">
-                            <!-- Paths -->
-                            <!-- Buyer to Seller (Direct HTTP) -->
-                            <path id="path-buyer-seller" d="M 0 150 L 400 150" stroke="#222" stroke-width="1" stroke-dasharray="5,5" fill="none" />
-                            
-                            <!-- Seller to Facilitator -->
-                            <path id="path-seller-fac" d="M 350 150 C 350 150, 200 150, 200 150" stroke="#333" stroke-width="2" fill="none" opacity="0" />
-                            
-                            <!-- Packets -->
-                            <circle class="packet" id="packet-http" r="4" fill="#66fcf1" opacity="0" />
-                            <circle class="packet" id="packet-settle" r="4" fill="#feb236" opacity="0" />
-                        </svg>
-                    </div>
-
-                    <!-- Workflow Steps Visualizer -->
-                    <div class="workflow-steps">
-                        <div class="step" id="step-1">1. REQUEST (402)</div>
-                        <div class="step" id="step-2">2. SIGN (712/7702)</div>
-                        <div class="step" id="step-3">3. SETTLE (CHAIN)</div>
-                        <div class="step" id="step-4">4. DELIVER DATA</div>
-                    </div>
-
-                    <div class="facilitator-card" id="agent-facilitator">
-                        <div class="facilitator-core">
-                            <div class="core-inner"></div>
-                        </div>
-                        <h2>FACILITATOR</h2>
-                        <div class="agent-role">EIP-7702 RELAYER</div>
-                        <div class="stat-box compact">
-                            <label>GAS TANK (ETH)</label>
-                            <span class="value eth-value">0.00</span>
-                        </div>
-                         <div class="status-indicator">READY</div>
-                         <div class="blockchain-status hidden">TX PENDING...</div>
-                    </div>
-                    
-                    <button id="start-btn" class="cyber-button">
-                        <span class="btn-text">INITIATE TRANSACTION</span>
-                    </button>
-                </div>
-
-                <!-- Agent 1: Seller (Right) -->
-                <div class="agent-card" id="agent-seller">
-                    <div class="agent-header">
-                        <div class="agent-icon seller-icon"></div>
-                        <h2>AGENT_01 [SELLER]</h2>
-                    </div>
-                    <div class="agent-role">WEATHER_DATA_PROVIDER</div>
-                    
-                    <div class="stats-container">
-                        <div class="stat-box">
-                            <label>ETH</label>
-                            <span class="value eth-value">0.00</span>
-                        </div>
-                        <div class="stat-box">
-                            <label>TOKENS</label>
-                            <span class="value token-value">0.00</span>
-                        </div>
-                    </div>
-                    <div class="status-indicator">LISTENING</div>
-                    
-                    <!-- Action Badge -->
-                    <div class="action-badge hidden">VERIFYING...</div>
-                </div>
+            <div class="node-stats">
+              <div class="stat">
+                <div class="stat-label">ETH</div>
+                <div class="stat-value" id="buyer-eth">--.--</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">TOKENS</div>
+                <div class="stat-value" id="buyer-tokens">--.--</div>
+              </div>
             </div>
 
-            <!-- Logs Console -->
-            <div class="console-wrapper">
-                <div class="console-header">
-                    <h3>SYSTEM_LOGS</h3>
-                    <div class="console-controls">
-                        <span class="dot"></span>
-                    </div>
-                </div>
-                <div class="console-output" id="logs-container">
-                    <div class="log-entry system">[SYSTEM] Connecting to visualizer uplink...</div>
-                </div>
+            <div class="node-status" id="buyer-status">IDLE</div>
+
+            <!-- Signature Detail Panel -->
+            <div class="detail-panel hidden" id="buyer-detail">
+              <div class="detail-title">SIGNATURES</div>
+              <div class="detail-row">
+                <span class="detail-key">EIP-712</span>
+                <span class="detail-val" id="sig-712">--</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-key">EIP-7702</span>
+                <span class="detail-val" id="sig-7702">--</span>
+              </div>
             </div>
-        </main>
+
+            <!-- Weather Result -->
+            <div class="weather-result hidden" id="weather-result">
+              <div class="wr-icon">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                >
+                  <circle cx="12" cy="12" r="5"></circle>
+                  <line x1="12" y1="1" x2="12" y2="3"></line>
+                  <line x1="12" y1="21" x2="12" y2="23"></line>
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                  <line x1="1" y1="12" x2="3" y2="12"></line>
+                  <line x1="21" y1="12" x2="23" y2="12"></line>
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+              </div>
+              <div class="wr-data">
+                <div class="wr-temp" id="wr-temp">--</div>
+                <div class="wr-loc" id="wr-loc">--</div>
+              </div>
+              <div class="wr-badge">PAID DATA</div>
+            </div>
+          </div>
+
+          <!-- Connection Area with animated packets -->
+          <div class="connections">
+            <!-- Message Bar -->
+            <div class="message-bar hidden" id="message-bar"></div>
+
+            <svg width="100%" height="100%" id="conn-svg">
+              <!-- Lines drawn by JS -->
+            </svg>
+
+            <!-- Facilitator Card (center-bottom) -->
+            <div class="node facilitator-node" id="node-facilitator">
+              <div class="node-header">
+                <div class="fac-core" id="fac-core">
+                  <div class="fac-core-inner"></div>
+                </div>
+                <div class="node-title">FACILITATOR</div>
+              </div>
+              <div class="node-role">EIP-7702 Relayer</div>
+
+              <div class="node-stats">
+                <div class="stat wide">
+                  <div class="stat-label">RELAYER GAS (ETH)</div>
+                  <div class="stat-value" id="fac-eth">--.--</div>
+                </div>
+              </div>
+
+              <div class="node-status" id="fac-status">READY</div>
+
+              <!-- Settlement Detail Panel -->
+              <div class="detail-panel hidden" id="fac-detail">
+                <div class="detail-title">SETTLEMENT</div>
+                <div class="detail-row">
+                  <span class="detail-key">Verify</span>
+                  <span class="detail-val" id="fac-verify">--</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-key">Tx Type</span>
+                  <span class="detail-val" id="fac-txtype">--</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-key">Tx Hash</span>
+                  <span class="detail-val mono" id="fac-txhash">--</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Seller Card -->
+          <div class="node" id="node-seller">
+            <div class="node-header">
+              <div class="node-dot seller-dot"></div>
+              <div class="node-title">SELLER AGENT</div>
+            </div>
+            <div class="node-role">Weather Data Provider</div>
+            <div class="node-address" id="seller-addr">0x3C44...F902</div>
+
+            <div class="node-stats">
+              <div class="stat">
+                <div class="stat-label">ETH</div>
+                <div class="stat-value" id="seller-eth">--.--</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">TOKENS</div>
+                <div class="stat-value" id="seller-tokens">--.--</div>
+              </div>
+            </div>
+
+            <div class="node-status" id="seller-status">LISTENING</div>
+
+            <!-- Price Tag -->
+            <div class="price-tag">
+              <div class="price-label">PRICE</div>
+              <div class="price-value">1 TOKEN / request</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom: Explanation + Logs side by side -->
+        <div class="bottom-panels">
+          <!-- Explanation Panel -->
+          <div class="explain-panel" id="explain-panel">
+            <div class="explain-header">PROTOCOL EXPLANATION</div>
+            <div class="explain-body" id="explain-body">
+              <p>
+                Click <strong>INITIATE</strong> or wait for the auto-purchase.
+                The visualization shows each step of the x402 protocol in real
+                time.
+              </p>
+              <p class="dim">
+                The Facilitator verifies EIP-712 signatures off-chain, then
+                submits an EIP-7702 Type 4 transaction so the Buyer never pays
+                gas.
+              </p>
+            </div>
+          </div>
+
+          <!-- Log Console -->
+          <div class="console-panel">
+            <div class="console-header">
+              <span>SYSTEM LOG</span>
+              <div class="console-controls">
+                <button class="btn-mode" id="mode-toggle">AUTO</button>
+                <button class="btn-initiate" id="start-btn">INITIATE</button>
+                <button class="btn-initiate btn-next hidden" id="next-btn">
+                  NEXT →
+                </button>
+              </div>
+            </div>
+            <div class="console-output" id="logs-container">
+              <div class="log-entry sys">
+                [SYS] Waiting for agent activity...
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
     <script src="script.js"></script>
-</body>
+  </body>
 </html>
