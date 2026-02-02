@@ -1,7 +1,7 @@
 {
   "name": "@facilitator/server",
-  "version": "0.1.0",
-  "description": "Self-hosted x402 payment facilitator server — verifies and settles any ERC-20 token via EIP-7702",
+  "version": "0.2.0",
+  "description": "Self-hosted x402 payment facilitator server — verifies and settles any ERC-20 token",
   "module": "src/index.ts",
   "bin": {
     "facilitator-server": "src/index.ts"

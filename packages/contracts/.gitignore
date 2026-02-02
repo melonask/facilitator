@@ -1,6 +1,9 @@
 # Compiler files
 cache/
-out/
+out/*
+!out/EIP3009Mock.sol
+!out/ERC20Mock.sol
+!out/Delegate.sol
 
 # Ignores development broadcast logs
 !/broadcast

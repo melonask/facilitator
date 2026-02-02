@@ -1,6 +1,6 @@
 {
   "name": "@facilitator/contracts",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "EIP-7702 Delegate contract for x402 gasless payment intents",
   "repository": {
@@ -10,5 +10,14 @@
   },
   "homepage": "https://github.com/melonask/facilitator/tree/main/packages/contracts#readme",
   "license": "MIT",
-  "author": "melonask"
+  "author": "melonask",
+  "keywords": [
+    "eip-7702",
+    "x402",
+    "solidity",
+    "foundry",
+    "delegate",
+    "payment-intents",
+    "erc20"
+  ]
 }

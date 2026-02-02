@@ -1,113 +1,91 @@
 # @facilitator/contracts
 
-Solidity smart contracts for the x402 EIP-7702 payment facilitator. The core contract is `Delegate.sol` — the delegation target that EOAs adopt via EIP-7702 to execute token transfers. Once set, the delegation persists across transactions.
+EIP-7702 Delegate contract for [x402](https://github.com/coinbase/x402) gasless payment intents.
+
+## Install
+
+### Foundry
 
 ```
-  How EIP-7702 Delegation Works
-
-  ┌─────────────────────────────────────────────────────────────┐
-  │                     Type 4 Transaction                      │
-  │                                                             │
-  │  authorization_list:                                        │
-  │    [{address: Delegate, chainId: 1, nonce: N, sig: ...}]   │
-  │                                                             │
-  │  to: buyer_eoa        (call target = buyer's own address)  │
-  │  data: transfer(intent, signature)                          │
-  │  from: relayer         (relayer pays gas)                   │
-  └─────────────────────────────────────────────────────────────┘
-                              │
-                              v
-  ┌─────────────────────────────────────────────────────────────┐
-  │  Buyer's EOA (during tx execution)                          │
-  │                                                             │
-  │  code = Delegate.sol  (persists, via EIP-7702)             │
-  │                                                             │
-  │  1. Verify EIP-712 signature (ECDSA.recover)               │
-  │  2. Check deadline not expired                              │
-  │  3. Consume nonce (replay protection)                       │
-  │  4. SafeERC20.safeTransfer(token, to, amount)              │
-  │     ─── works with ALL ERC-20 tokens ───                   │
-  │     ─── including USDT (no bool return) ───                │
-  └─────────────────────────────────────────────────────────────┘
+forge install melonask/facilitator
 ```
 
-## Contracts
+<table>
+<tr><td>
 
-### Delegate.sol
+Or add to your `remappings.txt`:
 
-| Function                                   | Description                                   |
-| ------------------------------------------ | --------------------------------------------- |
-| `transfer(PaymentIntent, signature)`       | ERC-20 transfer via EIP-712 signed intent     |
-| `transferEth(EthPaymentIntent, signature)` | Native ETH transfer via EIP-712 signed intent |
-| `invalidateNonce(nonce)`                   | Cancel a nonce to prevent future use          |
+</td><td>
 
-**Structs:**
+Or add to your `foundry.toml`:
+
+</td></tr>
+<tr><td>
+
+```
+@facilitator/=lib/facilitator/packages/
+```
+
+</td><td>
+
+```
+remappings=[
+    "@facilitator/=lib/facilitator/packages/"
+]
+```
+
+</td></tr>
+</table>
+
+## Usage
 
 ```solidity
-struct PaymentIntent {
-    address token;      // ERC-20 token address
-    uint256 amount;     // Transfer amount in wei
-    address to;         // Recipient address
-    uint256 nonce;      // Replay protection nonce
-    uint256 deadline;   // Unix timestamp expiry
-}
-
-struct EthPaymentIntent {
-    uint256 amount;     // ETH amount in wei
-    address to;         // Recipient address
-    uint256 nonce;      // Replay protection nonce
-    uint256 deadline;   // Unix timestamp expiry
-}
+import {Delegate} from "@facilitator/contracts/src/Delegate.sol";
 ```
 
-**Security features:**
+## Overview
 
-| Feature                | Implementation                                             |
-| ---------------------- | ---------------------------------------------------------- |
-| Signature verification | OpenZeppelin `ECDSA.recover` + EIP-712 domain separation   |
-| Replay protection      | Per-nonce storage slot (custom slot `0x27f372...`)         |
-| Deadline enforcement   | `block.timestamp <= deadline` check                        |
-| Non-standard tokens    | OpenZeppelin `SafeERC20.safeTransfer` (handles USDT, etc.) |
-| Domain binding         | `verifyingContract = msg.sender` (the delegating EOA)      |
+`Delegate` is an [EIP-7702](https://eips.ethereum.org/EIPS/eip-7702) delegate contract that enables gasless ERC-20 and ETH transfers via signed payment intents. A relayer submits the EIP-712 signed intent on behalf of the user.
 
-## Prerequisites
+### Structs
 
-- [Foundry](https://getfoundry.sh/)
+- **`PaymentIntent`** — ERC-20 transfer: `token`, `amount`, `to`, `nonce`, `deadline`
+- **`EthPaymentIntent`** — Native ETH transfer: `amount`, `to`, `nonce`, `deadline`
 
-## Build
+### Functions
 
-```sh
+| Function                         | Description                                |
+| -------------------------------- | ------------------------------------------ |
+| `transfer(intent, signature)`    | Execute a signed ERC-20 payment intent     |
+| `transferEth(intent, signature)` | Execute a signed native ETH payment intent |
+| `invalidateNonce(nonce)`         | Cancel a pending intent (owner only)       |
+| `isValidSignature(hash, sig)`    | ERC-1271 signature validation (ERC-7739)   |
+
+### Security
+
+- Each nonce can only be used once (replay protection)
+- Intents expire after `deadline` (timestamp)
+- Only the delegated account (`address(this)`) can sign valid intents
+- ERC-1271 signatures validated via [ERC-7739](https://eips.ethereum.org/EIPS/eip-7739) nested typed data
+- Uses OpenZeppelin's `ECDSA`, `EIP712`, `ERC7739`, `SignerEIP7702`, and `SafeERC20`
+
+## Development
+
+```bash
 forge build
-```
-
-## Test
-
-```sh
 forge test -vv
 ```
 
-## Test Coverage
+## Deploy
 
-| Test                                | Description                            |
-| ----------------------------------- | -------------------------------------- |
-| `test_Eip7702_DelegatedTransfer`    | ERC-20 transfer via delegated code     |
-| `test_Eip7702_DelegatedETHTransfer` | Native ETH transfer via delegated code |
-| `test_InvalidateNonce`              | Nonce cancellation prevents future use |
-| `test_ReplayProtection`             | Same nonce cannot be used twice        |
+The contract is deployed deterministically via CREATE2, guaranteeing the same address on every chain.
 
-## Configuration
+```bash
+export DEPLOYER_PRIVATE_KEY=0x...
+export DEPLOY_SALT=0x0000...  # optional, defaults to zero
 
-The project targets the **Prague EVM** version (required for EIP-7702 opcodes). See [`foundry.toml`](foundry.toml):
-
-```toml
-[profile.default]
-evm_version = "prague"
+forge script script/Deploy.s.sol --rpc-url <RPC_URL> --broadcast
 ```
-
-## Dependencies
-
-- [OpenZeppelin Contracts](https://github.com/OpenZeppelin/openzeppelin-contracts) — `ECDSA`, `EIP712`, `SafeERC20`
-- [forge-std](https://github.com/foundry-rs/forge-std) — Foundry test framework
 
 ## License
 

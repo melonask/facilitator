@@ -1,157 +1,59 @@
-# x402 Facilitator (EIP-7702)
+# x402 Facilitator
 
-<img src="scr.png">
+<img src="https://raw.githubusercontent.com/melonask/facilitator/refs/heads/main/packages/demo/public/demo.gif" alt="Web app showing demo agents for the x402 EIP-7702 proposal, automatic purchase between agents via API.">
 
-A self-hosted **x402 payment facilitator** that enables **any ERC-20 token** (including USDT) for HTTP 402 payments using EIP-7702 delegated transactions. Compatible with the [`@x402`](https://www.x402.org/) protocol and designed as a drop-in alternative to third-party facilitator services like Coinbase's.
+Self-hosted payment facilitator for the [x402 protocol](https://www.x402.org/). Settles ERC-20 and native ETH payments on any EVM chain using EIP-7702 delegation -- buyers never pay gas.
 
-```
-                              x402 Payment Flow
- ┌──────────┐                                           ┌──────────┐
- │  Buyer   │─── GET /resource ────────────────────────>│  Seller  │
- │ (Client) │<── 402 + PAYMENT-REQUIRED header ─────────│ (Server) │
- │          │                                           │          │
- │          │─── GET /resource ────────────────────────>│          │
- │          │    + PAYMENT-SIGNATURE header             │          │
- │          │                                           │          │
- │          │         ┌──────────────┐                  │          │
- │          │         │  Facilitator │<─ POST /verify ──│          │
- │          │         │  (this repo) │── {isValid} ────>│          │
- │          │         │              │<─ POST /settle ──│          │
- │          │         │              │── tx receipt ───>│          │
- │          │         └──────┬───────┘                  │          │
- │          │                │                          │          │
- │          │            EIP-7702 tx                    │          │
- │          │            (on-chain)                     │          │
- │          │                │                          │          │
- │          │         ┌──────┴───────┐                  │          │
- │          │         │  Blockchain  │                  │          │
- │          │         └──────────────┘                  │          │
- │          │                                           │          │
- │          │<── 200 + data + PAYMENT-RESPONSE ─────────│          │
- └──────────┘                                           └──────────┘
-```
+## How It Works
 
-## Why This Exists
-
-| Feature           | Coinbase Facilitator                   | This Facilitator                                    |
-| ----------------- | -------------------------------------- | --------------------------------------------------- |
-| **Token support** | EIP-3009 tokens only (USDC)            | **Any ERC-20** (USDT, DAI, WETH, etc.) + native ETH |
-| **Hosting**       | Third-party SaaS                       | **Self-hosted** — you control the relayer           |
-| **Protocol**      | x402 v2                                | x402 v2 (fully compatible)                          |
-| **Mechanism**     | `transferWithAuthorization` (EIP-3009) | **EIP-7702 delegation** + EIP-712 intents           |
-| **Gas model**     | Facilitator pays gas                   | Facilitator pays gas (relayer account)              |
-| **Chain support** | Fixed set                              | **Any EVM chain** via `RPC_URL_<chainId>`           |
-
-### How EIP-7702 Enables Any ERC-20
-
-Coinbase's facilitator relies on EIP-3009 (`transferWithAuthorization`), which is only implemented by a few tokens (notably USDC). Most tokens — including USDT, DAI, WETH — do not support it.
-
-This project uses **EIP-7702** instead: the buyer's EOA delegates to a [`Delegate`](packages/contracts/src/Delegate.sol) smart contract that executes `SafeERC20.safeTransfer` on behalf of the user. The delegation persists after the transaction, so subsequent payments skip the authorization list and save gas. This works with **every ERC-20 token**, including non-standard ones like USDT that don't return a boolean from `transfer()`.
+Sellers protect HTTP endpoints with a `402 Payment Required` response. Buyers sign an EIP-712 payment intent and an EIP-7702 authorization off-chain. The facilitator verifies signatures, checks balances, and submits a Type 4 transaction as the relayer.
 
 ```
-  EIP-7702 Delegation (Type 4 Transaction)
-
-  ┌─────────────────────────────────────────────────┐
-  │ Buyer's EOA (0xBuyer...)                        │
-  │                                                 │
-  │  Before: empty code                             │
-  │  During tx: code = Delegate.sol                 │──> safeTransfer(token, to, amount)
-  │  After: code persists                           │
-  │                                                 │
-  │  Signed: EIP-7702 authorization (delegate to)   │
-  │  Signed: EIP-712 PaymentIntent (what to pay)    │
-  │  Gas: paid by relayer, not the buyer            │
-  └─────────────────────────────────────────────────┘
+  Buyer                    Seller                  Facilitator
+    |--- GET /resource ----->|                         |
+    |<-- 402 + requirements -|                         |
+    | (sign intent off-chain)|                         |
+    |--- GET + PAYMENT-SIG ->|--- POST /verify ------->|
+    |                        |--- POST /settle ------->|
+    |                        |     (Type 4 tx)         |
+    |<-- 200 + data ---------|<-- { txHash } ----------|
 ```
-
-## Project Structure
-
-```
-packages/
-├── contracts/   Delegate.sol — EIP-7702 delegation target (Foundry/Solidity)
-├── server/      Facilitator server — verifies + settles payments (Bun/TypeScript)
-└── agents/      Demo seller & buyer agents for testing (Bun/TypeScript)
-```
-
-| Package                            | Description                                         | Docs                                   |
-| ---------------------------------- | --------------------------------------------------- | -------------------------------------- |
-| [`contracts`](packages/contracts/) | Solidity smart contract for EIP-7702 delegation     | [README](packages/contracts/README.md) |
-| [`server`](packages/server/)       | Self-hosted x402 facilitator with verify/settle API | [README](packages/server/README.md)    |
-| [`agents`](packages/agents/)       | Demo weather-seller and autonomous buyer agents     | [README](packages/agents/README.md)    |
-
-## Prerequisites
-
-- [Bun](https://bun.sh/) v1.1+
-- [Foundry](https://getfoundry.sh/) (`anvil`, `forge`)
 
 ## Quick Start
 
-### Run Your Own Facilitator
-
-```sh
-# Start the server (all config via CLI flags)
+```bash
 bunx @facilitator/server \
   --relayer-private-key 0x... \
   --delegate-address 0x... \
-  --rpc-url 1=https://eth.llamarpc.com \
-  --rpc-url 8453=https://mainnet.base.org \
-  --port 3000
-
-# Or use environment variables
-export RELAYER_PRIVATE_KEY="0x..."
-export DELEGATE_ADDRESS="0x..."
-export RPC_URL_1="https://eth.llamarpc.com"
-bunx @facilitator/server
+  --rpc-url 1=https://eth-mainnet.g.alchemy.com/v2/...
 ```
 
-See [`packages/server`](packages/server/README.md) for the full CLI reference and API docs.
+See [`packages/server`](packages/server) for full configuration reference.
 
-### Run the Demo
+## Monorepo Structure
 
-```sh
+| Package                                    | Description                                                   |
+| ------------------------------------------ | ------------------------------------------------------------- |
+| [`packages/server`](packages/server)       | Facilitator HTTP server (verify + settle endpoints)           |
+| [`packages/contracts`](packages/contracts) | Delegate.sol -- EIP-7702 delegation contract (Foundry)        |
+| [`packages/demo`](packages/demo)           | Interactive web visualizer with automated buyer/seller agents |
+
+## Running the Demo
+
+```bash
+git clone https://github.com/melonask/facilitator && cd facilitator
 bun install
 bun run demo
 ```
 
-The demo orchestrates everything: Anvil blockchain, contract deployment, facilitator server, seller agent, and buyer agent. A web UI opens at `http://localhost:8080` after the first successful purchase.
+This starts Anvil, deploys contracts, launches the facilitator server + demo agents, and opens the visualizer.
 
-## API Reference
+## Security Considerations
 
-### Facilitator Endpoints
-
-| Method | Endpoint               | Description                                  |
-| ------ | ---------------------- | -------------------------------------------- |
-| `GET`  | `/healthcheck`         | Service status and uptime                    |
-| `GET`  | `/supported`           | Supported schemes, networks, relayer address |
-| `GET`  | `/discovery/resources` | Bazaar catalog (paginated)                   |
-| `POST` | `/verify`              | Off-chain verification of a payment payload  |
-| `POST` | `/settle`              | Verify + submit transaction on-chain         |
-| `GET`  | `/balance`             | Relayer ETH balance (debug)                  |
-
-## Testing
-
-```sh
-# Solidity unit tests (Foundry)
-bun run test:contracts
-
-# TypeScript integration tests (all workspace packages)
-bun run test
-
-# Type checking
-bun run typecheck
-```
-
-## Multi-Chain Support
-
-The facilitator supports any EVM chain. Add RPC endpoints via environment variables:
-
-```sh
-export RPC_URL_8453=https://mainnet.base.org      # Base
-export RPC_URL_1=https://eth.llamarpc.com         # Ethereum Mainnet
-export RPC_URL_42161=https://arb1.arbitrum.io/rpc # Arbitrum
-```
-
-Format: `RPC_URL_<chainId>`
+- The relayer private key can only execute pre-signed intents through the Delegate contract. It has no custody of user funds.
+- Each payment intent includes a nonce and deadline to prevent replay and expiration attacks.
+- The Delegate contract verifies EIP-712 signatures on-chain before executing transfers.
+- All off-chain verification (signature recovery, balance checks, nonce tracking) is re-performed during settlement.
 
 ## License
 

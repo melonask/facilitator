@@ -25,8 +25,14 @@ export const bazaarManager = {
     catalog.set(item.resource, item);
   },
 
-  list(limit = 20, offset = 0) {
-    const allItems = Array.from(catalog.values()).sort(
+  list(limit = 20, offset = 0, type?: string) {
+    let allItems = Array.from(catalog.values());
+
+    if (type) {
+      allItems = allItems.filter((item) => item.type === type);
+    }
+
+    allItems.sort(
       (a, b) =>
         new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime(),
     );

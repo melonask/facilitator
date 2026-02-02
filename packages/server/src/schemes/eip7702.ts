@@ -1,14 +1,17 @@
-import { type Address, encodeFunctionData, verifyTypedData } from "viem";
+import type { SchemeNetworkFacilitator } from "@x402/core/types";
+import { encodeFunctionData, verifyTypedData, type Address } from "viem";
 import { recoverAuthorizationAddress } from "viem/utils";
-import { DELEGATE_ABI, ERC20_ABI } from "./abi";
+import { DELEGATE_ABI, ERC20_ABI } from "../abi";
 import {
   DELEGATE_CONTRACT_ADDRESS,
   getClients,
   relayerAccount,
-} from "./config";
-import { nonceManager } from "./storage";
+} from "../config";
+import { log } from "../logger";
+import { nonceManager } from "../storage";
 import {
   ADDRESS_ZERO,
+  ErrorReason,
   type Eip7702Authorization,
   type Eip7702EthPayloadData,
   type Eip7702PayloadData,
@@ -16,7 +19,15 @@ import {
   type PaymentRequirements,
   type SettleResponse,
   type VerifyResponse,
-} from "./types";
+} from "../types";
+
+// --- Constants ---
+
+/** Grace buffer (seconds) to account for latency between verify and on-chain execution. */
+const EXPIRY_GRACE_SECONDS = 6;
+
+/** Timeout for waiting on transaction receipts (ms). */
+const RECEIPT_TIMEOUT_MS = 30_000;
 
 // --- EIP-712 Type Definitions ---
 
@@ -60,7 +71,7 @@ function extractPayload<T extends Eip7702PayloadData | Eip7702EthPayloadData>(
   payload: Record<string, unknown>,
 ): T {
   if (!payload.authorization || !payload.intent || !payload.signature) {
-    throw new Error("Missing required EIP-7702 payload fields");
+    throw new Error(ErrorReason.InvalidPayload);
   }
   return payload as unknown as T;
 }
@@ -69,9 +80,24 @@ function buildDomain(chainId: number, verifyingContract: Address) {
   return { ...EIP712_DOMAIN, chainId, verifyingContract };
 }
 
+function addrEq(a: string, b: string): boolean {
+  return a.toLowerCase() === b.toLowerCase();
+}
+
 // --- Mechanism ---
 
-export class Eip7702Mechanism {
+export class Eip7702Mechanism implements SchemeNetworkFacilitator {
+  readonly scheme = "eip7702" as const;
+  readonly caipFamily = "eip155:*" as const;
+
+  getExtra(_network: string): undefined {
+    return undefined;
+  }
+
+  getSigners(_network: string): string[] {
+    return [relayerAccount.address];
+  }
+
   private async recoverSigner(authorization: Eip7702Authorization) {
     const signer = await recoverAuthorizationAddress({
       authorization: {
@@ -87,11 +113,8 @@ export class Eip7702Mechanism {
       },
     });
 
-    if (
-      authorization.contractAddress.toLowerCase() !==
-      DELEGATE_CONTRACT_ADDRESS.toLowerCase()
-    ) {
-      throw new Error("Untrusted Delegate Contract");
+    if (!addrEq(authorization.contractAddress, DELEGATE_CONTRACT_ADDRESS)) {
+      throw new Error(ErrorReason.UntrustedDelegate);
     }
 
     return signer;
@@ -141,6 +164,77 @@ export class Eip7702Mechanism {
   }
 
   /**
+   * Cross-check that the `accepted` requirements embedded in the V2 payload
+   * match the requirements provided by the seller. Prevents a buyer from
+   * agreeing to different terms than what the seller actually requires.
+   */
+  private assertAcceptedRequirements(
+    payload: PaymentPayload,
+    reqs: PaymentRequirements,
+  ): ErrorReason | null {
+    const accepted = (payload as Record<string, unknown>).accepted as
+      | Record<string, unknown>
+      | undefined;
+    if (!accepted) return null; // V1 payloads don't have `accepted`
+
+    if (accepted.scheme !== undefined && accepted.scheme !== reqs.scheme) {
+      return ErrorReason.AcceptedRequirementsMismatch;
+    }
+    if (accepted.network !== undefined && accepted.network !== reqs.network) {
+      return ErrorReason.AcceptedRequirementsMismatch;
+    }
+    if (
+      accepted.asset !== undefined &&
+      !addrEq(accepted.asset as string, reqs.asset)
+    ) {
+      return ErrorReason.AcceptedRequirementsMismatch;
+    }
+    if (
+      accepted.payTo !== undefined &&
+      !addrEq(accepted.payTo as string, reqs.payTo)
+    ) {
+      return ErrorReason.AcceptedRequirementsMismatch;
+    }
+    if (
+      accepted.amount !== undefined &&
+      BigInt(accepted.amount as string) < BigInt(reqs.amount)
+    ) {
+      return ErrorReason.AcceptedRequirementsMismatch;
+    }
+    return null;
+  }
+
+  /**
+   * Validate that the intent fields match the seller's requirements.
+   * This prevents the buyer from signing an intent that underpays,
+   * pays the wrong recipient, or uses the wrong token.
+   */
+  private assertIntentMatchesRequirements(
+    intent: { amount: string; to: Address; token?: Address },
+    reqs: PaymentRequirements,
+    ethPayment: boolean,
+  ): ErrorReason | null {
+    // Recipient check
+    if (!addrEq(intent.to, reqs.payTo)) {
+      return ErrorReason.RecipientMismatch;
+    }
+
+    // Amount check — intent must cover at least the required amount
+    if (BigInt(intent.amount) < BigInt(reqs.amount)) {
+      return ErrorReason.InsufficientPaymentAmount;
+    }
+
+    // Asset check — for ERC-20, token in intent must match requirements
+    if (!ethPayment) {
+      if (!intent.token || !addrEq(intent.token, reqs.asset)) {
+        return ErrorReason.AssetMismatch;
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Shared verification logic.
    * @param consumeNonce - if true, marks the nonce as used (for settlement).
    *                       if false, only checks whether it has been used (read-only verify).
@@ -158,10 +252,21 @@ export class Eip7702Mechanism {
       );
       const { publicClient } = getClients(chainId);
 
-      // 1. Verify EIP-7702 authorization
+      // 1. Cross-check accepted requirements (V2)
+      const acceptedErr = this.assertAcceptedRequirements(payload, reqs);
+      if (acceptedErr) {
+        return { isValid: false, invalidReason: acceptedErr };
+      }
+
+      // 2. Chain ID cross-validation
+      if (authorization.chainId !== chainId) {
+        return { isValid: false, invalidReason: ErrorReason.ChainIdMismatch };
+      }
+
+      // 3. Verify EIP-7702 authorization (recovers signer, checks delegate)
       const signer = await this.recoverSigner(authorization);
 
-      // 2. Verify EIP-712 intent signature
+      // 4. Verify EIP-712 intent signature
       const valid = await this.verifyIntentSignature(
         payload,
         ethPayment,
@@ -170,31 +275,50 @@ export class Eip7702Mechanism {
         signature,
       );
       if (!valid) {
-        return { isValid: false, invalidReason: "Invalid Intent Signature" };
+        return { isValid: false, invalidReason: ErrorReason.InvalidSignature };
       }
 
-      // 3. Check deadline
+      // 5. Validate intent fields against requirements (recipient, amount, asset)
       const intent = extractPayload<Eip7702PayloadData>(payload.payload).intent;
-      if (BigInt(intent.deadline) < BigInt(Math.floor(Date.now() / 1000))) {
-        return { isValid: false, invalidReason: "Deadline Expired" };
+      const intentForValidation = ethPayment
+        ? { amount: intent.amount, to: intent.to }
+        : { amount: intent.amount, to: intent.to, token: intent.token };
+      const intentErr = this.assertIntentMatchesRequirements(
+        intentForValidation,
+        reqs,
+        ethPayment,
+      );
+      if (intentErr) {
+        return { isValid: false, invalidReason: intentErr };
       }
 
-      // 4. Check nonce
+      // 6. Check deadline with grace buffer
+      const nowWithGrace = BigInt(
+        Math.floor(Date.now() / 1000) + EXPIRY_GRACE_SECONDS,
+      );
+      if (BigInt(intent.deadline) < nowWithGrace) {
+        return { isValid: false, invalidReason: ErrorReason.Expired };
+      }
+
+      // 7. Check nonce
       if (consumeNonce) {
         if (!nonceManager.checkAndMark(intent.nonce.toString())) {
-          return { isValid: false, invalidReason: "Nonce Used" };
+          return { isValid: false, invalidReason: ErrorReason.NonceUsed };
         }
       } else {
         if (nonceManager.has(intent.nonce.toString())) {
-          return { isValid: false, invalidReason: "Nonce Used" };
+          return { isValid: false, invalidReason: ErrorReason.NonceUsed };
         }
       }
 
-      // 5. Check balance
+      // 8. Check balance
       if (ethPayment) {
         const balance = await publicClient.getBalance({ address: signer });
         if (balance < BigInt(intent.amount)) {
-          return { isValid: false, invalidReason: "Insufficient Balance" };
+          return {
+            isValid: false,
+            invalidReason: ErrorReason.InsufficientBalance,
+          };
         }
       } else {
         const balance = await publicClient.readContract({
@@ -204,13 +328,16 @@ export class Eip7702Mechanism {
           args: [signer],
         });
         if (balance < BigInt(intent.amount)) {
-          return { isValid: false, invalidReason: "Insufficient Balance" };
+          return {
+            isValid: false,
+            invalidReason: ErrorReason.InsufficientBalance,
+          };
         }
       }
 
       return { isValid: true, payer: signer };
     } catch (e) {
-      console.error(e);
+      log.error("Verification failed", { error: (e as Error).message });
       return { isValid: false, invalidReason: (e as Error).message };
     }
   }
@@ -289,6 +416,28 @@ export class Eip7702Mechanism {
         data,
       } as const;
 
+      // Simulate the transaction before spending gas
+      try {
+        if (hasCode) {
+          await publicClient.call(txBase);
+        } else {
+          // For EIP-7702 txs we can't simulate with authorizationList via call(),
+          // but the on-chain verification in the delegate contract will revert if
+          // signatures are invalid, so the verify step above covers this case.
+        }
+      } catch (simError) {
+        log.error("Transaction simulation failed", {
+          error: (simError as Error).message,
+          network: reqs.network,
+        });
+        return {
+          success: false,
+          errorReason: ErrorReason.TransactionSimulationFailed,
+          transaction: "",
+          network: reqs.network,
+        };
+      }
+
       const hash = hasCode
         ? await walletClient.sendTransaction(txBase)
         : await walletClient.sendTransaction({
@@ -306,7 +455,26 @@ export class Eip7702Mechanism {
             ],
           });
 
-      await publicClient.waitForTransactionReceipt({ hash });
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash,
+        timeout: RECEIPT_TIMEOUT_MS,
+      });
+
+      if (receipt.status === "reverted") {
+        log.error("Transaction reverted", { hash, network: reqs.network });
+        return {
+          success: false,
+          errorReason: "TransactionReverted",
+          transaction: hash,
+          network: reqs.network,
+        };
+      }
+
+      log.info("Settlement successful", {
+        hash,
+        network: reqs.network,
+        payer,
+      });
 
       return {
         success: true,
@@ -315,6 +483,10 @@ export class Eip7702Mechanism {
         payer,
       };
     } catch (e) {
+      log.error("Settlement failed", {
+        error: (e as Error).message,
+        network: reqs.network,
+      });
       return {
         success: false,
         errorReason: (e as Error).message,
@@ -324,5 +496,3 @@ export class Eip7702Mechanism {
     }
   }
 }
-
-export const mechanism = new Eip7702Mechanism();

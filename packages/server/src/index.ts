@@ -1,12 +1,4 @@
 import { parseArgs } from "util";
-import type {
-  DiscoveryResponse,
-  SettleRequest,
-  SettleResponse,
-  SupportedResponse,
-  VerifyRequest,
-  VerifyResponse,
-} from "./types";
 
 const { values: args } = parseArgs({
   args: Bun.argv.slice(2),
@@ -40,13 +32,17 @@ Examples:
 }
 
 // Apply CLI args to process.env before config module reads them
-if (args["relayer-private-key"]) process.env.RELAYER_PRIVATE_KEY = args["relayer-private-key"] as string;
-if (args["delegate-address"]) process.env.DELEGATE_ADDRESS = args["delegate-address"] as string;
+if (args["relayer-private-key"])
+  process.env.RELAYER_PRIVATE_KEY = args["relayer-private-key"] as string;
+if (args["delegate-address"])
+  process.env.DELEGATE_ADDRESS = args["delegate-address"] as string;
 if (args["rpc-url"]) {
   for (const entry of args["rpc-url"] as string[]) {
     const eq = entry.indexOf("=");
     if (eq === -1) {
-      console.error(`Invalid --rpc-url format: "${entry}" (expected chainId=url)`);
+      console.error(
+        `Invalid --rpc-url format: "${entry}" (expected chainId=url)`,
+      );
       process.exit(1);
     }
     process.env[`RPC_URL_${entry.slice(0, eq)}`] = entry.slice(eq + 1);
@@ -57,108 +53,77 @@ const PORT = Number(args.port ?? process.env.PORT) || 3000;
 const HOST = (args.host as string) ?? process.env.HOST ?? "0.0.0.0";
 
 // Import after env is populated from CLI args
-const { DELEGATE_CONTRACT_ADDRESS, relayerAccount, getClients } = await import("./config");
-const { formatEther } = await import("viem");
-const { mechanism } = await import("./mechanism");
+const { getSupportedNetworks } = await import("./config");
+const { x402Facilitator } = await import("@x402/core/facilitator");
+const { Eip7702Mechanism } = await import("./schemes/eip7702");
+const { ExactEvmMechanism } = await import("./schemes/exact");
+const { log } = await import("./logger");
 const { bazaarManager } = await import("./storage");
+const {
+  CORS_HEADERS,
+  json,
+  setFacilitator,
+  handleHealthcheck,
+  handleSupported,
+  handleDiscovery,
+  handleVerifySchema,
+  handleSettleSchema,
+  handleVerify,
+  handleSettle,
+  handleInfo,
+} = await import("./handlers");
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Payment-Signature",
-} as const;
+// --- Facilitator Setup ---
 
-function json(data: unknown, status = 200) {
-  return Response.json(data, { status, headers: CORS_HEADERS });
-}
-
-// --- Route Handlers ---
-
-function handleHealthcheck() {
-  return json({
-    status: "ok",
-    uptime: process.uptime(),
-    timestamp: Date.now(),
-  });
-}
-
-function handleSupported() {
-  const response: SupportedResponse = {
-    kinds: [
-      {
-        x402Version: 2,
-        scheme: "eip7702",
-        network: "eip155:*",
-        extra: {},
-      },
-    ],
-    extensions: ["bazaar"],
-    signers: { "eip155:*": [relayerAccount.address] },
-  };
-  return json({ ...response, delegateContract: DELEGATE_CONTRACT_ADDRESS });
-}
-
-function handleDiscovery(url: URL) {
-  const limit = Number(url.searchParams.get("limit")) || 100;
-  const offset = Number(url.searchParams.get("offset")) || 0;
-  const { items, total } = bazaarManager.list(limit, offset);
-
-  const response: DiscoveryResponse = {
-    x402Version: 2,
-    items,
-    pagination: { limit, offset, total },
-  };
-  return json(response);
-}
-
-async function handleVerify(req: Request) {
-  const body = (await req.json()) as VerifyRequest;
-  const result: VerifyResponse = await mechanism.verify(
-    body.paymentPayload,
-    body.paymentRequirements,
-  );
-  return json(result);
-}
-
-async function handleSettle(req: Request) {
-  const body = (await req.json()) as SettleRequest;
-  const result: SettleResponse = await mechanism.settle(
-    body.paymentPayload,
-    body.paymentRequirements,
-  );
-
-  if (result.success && body.paymentPayload.resource?.url) {
-    bazaarManager.upsert({
-      resource: body.paymentPayload.resource.url,
-      type: "http",
-      x402Version: 2,
-      accepts: [body.paymentRequirements],
-      lastUpdated: new Date().toISOString(),
-      metadata: body.paymentPayload.extensions?.bazaar as
-        | Record<string, unknown>
-        | undefined,
-    });
-  }
-
-  return json(result);
-}
-
-async function handleBalance() {
+/** Normalize a resource URL to origin+pathname (strip query params and hash). */
+function normalizeResourceUrl(raw: string): string {
   try {
-    // Default to Anvil chain ID 31337 for this demo
-    const chainId = 31337; 
-    const { publicClient } = getClients(chainId);
-    const balance = await publicClient.getBalance({ address: relayerAccount.address });
-    
-    return json({
-      address: relayerAccount.address,
-      eth: formatEther(balance),
-      chainId
-    });
-  } catch (e) {
-    return json({ error: "Failed to fetch balance", details: (e as Error).message }, 500);
+    const u = new URL(raw);
+    return `${u.origin}${u.pathname}`;
+  } catch {
+    return raw;
   }
 }
+
+/** Extract HTTP method from bazaar extension info, if present. */
+function extractMethodFromExtension(
+  ext: Record<string, unknown> | undefined,
+): string | undefined {
+  if (!ext) return undefined;
+  const info = ext.info as Record<string, unknown> | undefined;
+  if (!info) return undefined;
+  const input = info.input as Record<string, unknown> | undefined;
+  return (input?.method as string) ?? undefined;
+}
+
+const supportedNetworks = getSupportedNetworks();
+const facilitator = new x402Facilitator();
+facilitator.register(supportedNetworks, new Eip7702Mechanism());
+facilitator.register(supportedNetworks, new ExactEvmMechanism());
+facilitator.registerExtension("bazaar");
+
+facilitator.onAfterSettle(async (ctx) => {
+  if (!ctx.result.success) return;
+
+  const resourceUrl = ctx.paymentPayload.resource?.url;
+  if (!resourceUrl) return;
+
+  const bazaarExt = ctx.paymentPayload.extensions?.bazaar as
+    | Record<string, unknown>
+    | undefined;
+
+  bazaarManager.upsert({
+    resource: normalizeResourceUrl(resourceUrl),
+    type: "http",
+    method: extractMethodFromExtension(bazaarExt),
+    x402Version: ctx.paymentPayload.x402Version ?? 2,
+    accepts: [ctx.requirements],
+    lastUpdated: new Date().toISOString(),
+    metadata: bazaarExt,
+  });
+});
+
+setFacilitator(facilitator);
 
 // --- Server ---
 
@@ -175,10 +140,13 @@ Bun.serve({
     try {
       if (req.method === "GET") {
         if (url.pathname === "/healthcheck") return handleHealthcheck();
-        if (url.pathname === "/supported") return handleSupported();
+        if (url.pathname === "/supported" || url.pathname === "/health")
+          return handleSupported();
         if (url.pathname === "/discovery/resources")
           return handleDiscovery(url);
-        if (url.pathname === "/balance") return await handleBalance();
+        if (url.pathname === "/verify") return handleVerifySchema();
+        if (url.pathname === "/settle") return handleSettleSchema();
+        if (url.pathname === "/info") return await handleInfo(url);
       }
 
       if (req.method === "POST") {
@@ -188,10 +156,13 @@ Bun.serve({
 
       return new Response("Not Found", { status: 404, headers: CORS_HEADERS });
     } catch (e) {
-      console.error(e);
+      log.error("Request failed", {
+        error: (e as Error).message,
+        path: url.pathname,
+      });
       return json({ error: (e as Error).message }, 500);
     }
   },
 });
 
-console.log(`x402 EIP-7702 Facilitator running on ${HOST}:${PORT}`);
+log.info("Server started", { host: HOST, port: PORT });

@@ -124,22 +124,24 @@ main {
   background: var(--bg-raised);
   border: 1px solid var(--border);
   flex-shrink: 0;
-  overflow-x: visible; /* Default for desktop tooltips */
+  overflow: hidden;
+}
+
+@media (max-width: 900px) {
+  .ts-detail {
+    display: none;
+  }
 }
 
 @media (max-width: 600px) {
   .timeline-bar {
-    padding: 10px 4px;
-    overflow-x: auto; /* Scroll on mobile */
+    padding: 8px 4px;
   }
   .timeline-step {
-    padding: 6px 4px;
-    flex-shrink: 0;
+    padding: 4px 3px;
+    gap: 4px;
   }
   .ts-label {
-    display: none;
-  }
-  .ts-detail {
     display: none;
   }
 }
@@ -147,13 +149,15 @@ main {
 .timeline-step {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: 6px;
+  padding: 6px 8px;
   border: 1px solid transparent;
   cursor: default;
   transition: all 0.4s ease;
   white-space: nowrap;
   position: relative;
+  min-width: 0;
+  flex-shrink: 1;
 }
 
 .timeline-step:hover {
@@ -207,10 +211,10 @@ main {
 }
 
 .timeline-connector {
-  width: 20px;
+  flex: 0 1 20px;
+  min-width: 6px;
   height: 1px;
   background: var(--border);
-  flex-shrink: 0;
 }
 
 /* Timeline active state */
@@ -604,27 +608,90 @@ main {
 }
 
 @media (max-width: 768px) {
+  body {
+    height: auto;
+    overflow: auto;
+  }
+  .container {
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 10px;
+    gap: 8px;
+  }
+  header {
+    padding-bottom: 8px;
+  }
+  .header-left h1 {
+    font-size: 0.85rem;
+  }
+  .network {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .node {
+    width: 100%;
+    min-width: 0;
+    padding: 10px;
+  }
+  .connections {
+    min-width: 0;
+    min-height: 40px;
+    padding-bottom: 0;
+  }
+  .connections svg {
+    display: none;
+  }
+  .facilitator-node {
+    width: 100%;
+    margin-top: 0;
+  }
   .bottom-panels {
     height: auto;
     flex-direction: column;
-    flex: 1;
   }
-  .explain-panel, .console-panel {
+  .explain-panel {
     width: 100%;
-    height: 50%;
-    min-height: 150px;
+    flex-shrink: 1;
   }
-  .container {
-    padding: 8px 10px;
-  }
-  .node {
-    padding: 8px;
+  .console-panel {
+    width: 100%;
+    min-height: 160px;
   }
   .node-title {
     font-size: 0.65rem;
   }
   .stat-value {
     font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 8px 6px;
+  }
+  .header-left h1 {
+    font-size: 0.75rem;
+  }
+  .header-sub {
+    display: none;
+  }
+  .node-stats {
+    gap: 4px;
+  }
+  .stat {
+    padding: 4px 6px;
+  }
+  .console-header {
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px 8px;
+  }
+  .console-controls {
+    flex-wrap: wrap;
+  }
+  .detail-val.mono {
+    max-width: 80px;
   }
 }
 

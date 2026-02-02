@@ -10,8 +10,9 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
 
 // Artifacts
-import delegateArtifact from "./Delegate.json";
-import tokenArtifact from "./MockERC20.json";
+import delegateArtifact from "../../contracts/out/Delegate.sol/Delegate.json";
+import tokenArtifact from "../../contracts/out/ERC20Mock.sol/ERC20Mock.json";
+import eip3009Artifact from "../../contracts/out/EIP3009Mock.sol/EIP3009Mock.json";
 
 const ANVIL_PORT = 8545;
 const SERVER_PORT = 3000;
@@ -36,6 +37,7 @@ let anvilProcess: any;
 let serverProcess: any;
 let delegateAddress: Hex;
 let tokenAddress: Hex;
+let eip3009TokenAddress: Hex;
 
 describe("x402 EIP-7702 Integration", () => {
   beforeAll(async () => {
@@ -71,10 +73,29 @@ describe("x402 EIP-7702 Integration", () => {
     tokenAddress = receipt2.contractAddress!;
     console.log("Token deployed at:", tokenAddress);
 
+    const deployEip3009Hash = await walletClient.deployContract({
+      account: deployer,
+      abi: eip3009Artifact.abi,
+      bytecode: eip3009Artifact.bytecode.object as Hex,
+    });
+    const receipt3 = await publicClient.waitForTransactionReceipt({
+      hash: deployEip3009Hash,
+    });
+    eip3009TokenAddress = receipt3.contractAddress!;
+    console.log("EIP3009Mock deployed at:", eip3009TokenAddress);
+
     await walletClient.writeContract({
       account: deployer,
       address: tokenAddress,
       abi: tokenArtifact.abi,
+      functionName: "mint",
+      args: [user.address, parseEther("1000")],
+    });
+
+    await walletClient.writeContract({
+      account: deployer,
+      address: eip3009TokenAddress,
+      abi: eip3009Artifact.abi,
       functionName: "mint",
       args: [user.address, parseEther("1000")],
     });
@@ -428,5 +449,165 @@ describe("x402 EIP-7702 Integration", () => {
     const settleJson = (await settleRes.json()) as any;
     console.log("ETH Settle Result:", settleJson);
     expect(settleJson.success).toBe(true);
+  }, 30000);
+
+  test("EIP-3009 transferWithAuthorization via exact scheme", async () => {
+    const facilitatorUrl = `http://localhost:${SERVER_PORT}`;
+
+    const requirements = {
+      scheme: "exact",
+      network: `eip155:${CHAIN_ID}`,
+      asset: eip3009TokenAddress,
+      amount: parseEther("10").toString(),
+      payTo: deployer.address,
+      maxTimeoutSeconds: 300,
+      extra: { name: "MockUSDC", version: "1" },
+    };
+
+    const nonce =
+      "0x0000000000000000000000000000000000000000000000000000000000000001" as Hex;
+    const validAfter = "0";
+    const validBefore = (Math.floor(Date.now() / 1000) + 3600).toString();
+
+    const authorization = {
+      from: user.address,
+      to: deployer.address,
+      value: requirements.amount,
+      validAfter,
+      validBefore,
+      nonce,
+    };
+
+    const signature = await user.signTypedData({
+      domain: {
+        name: "MockUSDC",
+        version: "1",
+        chainId: CHAIN_ID,
+        verifyingContract: eip3009TokenAddress,
+      },
+      types: {
+        TransferWithAuthorization: [
+          { name: "from", type: "address" },
+          { name: "to", type: "address" },
+          { name: "value", type: "uint256" },
+          { name: "validAfter", type: "uint256" },
+          { name: "validBefore", type: "uint256" },
+          { name: "nonce", type: "bytes32" },
+        ],
+      },
+      primaryType: "TransferWithAuthorization",
+      message: {
+        from: user.address,
+        to: deployer.address,
+        value: BigInt(requirements.amount),
+        validAfter: BigInt(validAfter),
+        validBefore: BigInt(validBefore),
+        nonce,
+      },
+    });
+
+    const paymentPayload = {
+      x402Version: 2,
+      resource: {
+        url: "http://example.com/resource",
+        description: "Test Resource",
+        mimeType: "application/json",
+      },
+      accepted: requirements,
+      payload: {
+        authorization,
+        signature,
+      },
+    };
+
+    // Verify
+    console.log("Calling /verify for exact EIP-3009...");
+    const verifyRes = await fetch(`${facilitatorUrl}/verify`, {
+      method: "POST",
+      body: JSON.stringify({
+        paymentPayload,
+        paymentRequirements: requirements,
+      }),
+    });
+
+    const verifyJson = (await verifyRes.json()) as any;
+    console.log("Exact Verify Result:", verifyJson);
+    expect(verifyJson.isValid).toBe(true);
+    expect(verifyJson.payer?.toLowerCase()).toBe(user.address.toLowerCase());
+
+    // Settle (new nonce)
+    const nonce2 =
+      "0x0000000000000000000000000000000000000000000000000000000000000002" as Hex;
+    const authorization2 = { ...authorization, nonce: nonce2 };
+
+    const signature2 = await user.signTypedData({
+      domain: {
+        name: "MockUSDC",
+        version: "1",
+        chainId: CHAIN_ID,
+        verifyingContract: eip3009TokenAddress,
+      },
+      types: {
+        TransferWithAuthorization: [
+          { name: "from", type: "address" },
+          { name: "to", type: "address" },
+          { name: "value", type: "uint256" },
+          { name: "validAfter", type: "uint256" },
+          { name: "validBefore", type: "uint256" },
+          { name: "nonce", type: "bytes32" },
+        ],
+      },
+      primaryType: "TransferWithAuthorization",
+      message: {
+        from: user.address,
+        to: deployer.address,
+        value: BigInt(requirements.amount),
+        validAfter: BigInt(validAfter),
+        validBefore: BigInt(validBefore),
+        nonce: nonce2,
+      },
+    });
+
+    const paymentPayloadSettle = {
+      ...paymentPayload,
+      payload: {
+        authorization: authorization2,
+        signature: signature2,
+      },
+    };
+
+    console.log("Calling /settle for exact EIP-3009...");
+    const settleRes = await fetch(`${facilitatorUrl}/settle`, {
+      method: "POST",
+      body: JSON.stringify({
+        paymentPayload: paymentPayloadSettle,
+        paymentRequirements: requirements,
+      }),
+    });
+
+    const settleJson2 = (await settleRes.json()) as any;
+    console.log("Exact Settle Result:", settleJson2);
+    expect(settleJson2.success).toBe(true);
+    expect(settleJson2.transaction).toBeTruthy();
+
+    // Verify on-chain state
+    const balanceUser = await publicClient.readContract({
+      address: eip3009TokenAddress,
+      abi: eip3009Artifact.abi,
+      functionName: "balanceOf",
+      args: [user.address],
+    });
+    const balancePayTo = await publicClient.readContract({
+      address: eip3009TokenAddress,
+      abi: eip3009Artifact.abi,
+      functionName: "balanceOf",
+      args: [deployer.address],
+    });
+
+    console.log("EIP3009 User Balance:", balanceUser);
+    console.log("EIP3009 PayTo Balance:", balancePayTo);
+
+    expect(balanceUser).toBe(parseEther("990"));
+    expect(balancePayTo).toBe(parseEther("10"));
   }, 30000);
 });

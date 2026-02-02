@@ -1,10 +1,15 @@
-import { createPublicClient, createWalletClient, defineChain, http } from "viem";
+import {
+  createPublicClient,
+  createWalletClient,
+  defineChain,
+  http,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-const RELAYER_KEY = process.env.RELAYER_PRIVATE_KEY as `0x${string}`;
-if (!RELAYER_KEY) throw new Error("RELAYER_PRIVATE_KEY is required");
+const RELAYER_PRIVATE_KEY = process.env.RELAYER_PRIVATE_KEY as `0x${string}`;
+if (!RELAYER_PRIVATE_KEY) throw new Error("RELAYER_PRIVATE_KEY is required");
 
-export const relayerAccount = privateKeyToAccount(RELAYER_KEY);
+export const relayerAccount = privateKeyToAccount(RELAYER_PRIVATE_KEY);
 
 export const DELEGATE_CONTRACT_ADDRESS = (process.env.DELEGATE_ADDRESS ??
   "") as `0x${string}`;
@@ -39,6 +44,18 @@ function buildClients(chainId: number) {
       transport,
     }),
   };
+}
+
+/** Derive supported networks from RPC_URL_<chainId> env vars. */
+export function getSupportedNetworks(): `${string}:${string}`[] {
+  const networks: `${string}:${string}`[] = [];
+  for (const key of Object.keys(process.env)) {
+    const match = key.match(/^RPC_URL_(\d+)$/);
+    if (match) {
+      networks.push(`eip155:${match[1]}`);
+    }
+  }
+  return networks;
 }
 
 type Clients = ReturnType<typeof buildClients>;

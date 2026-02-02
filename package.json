@@ -1,9 +1,9 @@
 {
   "name": "facilitator",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Self-hosted x402 payment facilitator using EIP-7702 — supports any ERC-20 token",
+  "description": "Self-hosted x402 payment facilitator server — verifies and settles any ERC-20 token",
   "repository": {
     "type": "git",
     "url": "https://github.com/melonask/facilitator"
@@ -16,14 +16,14 @@
   "author": "melonask",
   "workspaces": [
     "packages/server",
-    "packages/agents"
+    "packages/demo"
   ],
   "scripts": {
-    "test": "bun test packages/server packages/agents",
+    "test": "bun test packages/server",
     "test:contracts": "cd packages/contracts && forge test -vv",
     "build:contracts": "cd packages/contracts && forge build",
     "typecheck": "bun run --filter '*' typecheck",
-    "demo": "bun run packages/agents/src/demo.ts"
+    "demo": "bun run packages/demo/src/demo.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.3.8",

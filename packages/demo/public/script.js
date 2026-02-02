@@ -184,7 +184,7 @@ async function pollBalances() {
       fetch(`${BUYER_URL}/balance`)
         .then((r) => r.json())
         .catch(() => null),
-      fetch(`${FAC_URL}/balance`)
+      fetch(`${FAC_URL}/info`)
         .then((r) => r.json())
         .catch(() => null),
     ]);
@@ -205,8 +205,8 @@ async function pollBalances() {
       sellerEth.textContent = parseFloat(s.eth).toFixed(4);
       sellerTokens.textContent = t;
     }
-    if (f) {
-      facEth.textContent = parseFloat(f.eth).toFixed(4);
+    if (f && f.networks && f.networks.length > 0) {
+      facEth.textContent = parseFloat(f.networks[0].eth).toFixed(4);
     }
   } catch (_) {}
 }
@@ -266,7 +266,7 @@ function handleVisuals(source, msg) {
           "No payment headers are attached yet — this is a normal HTTP request.</p>" +
           '<p class="dim">The Seller will check for a PAYMENT-SIGNATURE header and reject with 402 if missing.</p>',
       );
-    }, 1000);
+    }, 1400);
   }
 
   // Step 2: Seller sends 402
@@ -285,7 +285,7 @@ function handleVisuals(source, msg) {
           "and network (<code>eip155:31337</code>).</p>" +
           '<p class="dim">This is the x402 protocol — any HTTP server can become a paid API.</p>',
       );
-    }, 1200);
+    }, 1400);
   }
 
   // Step 2b: Buyer receives 402 and analyzes
@@ -342,7 +342,7 @@ function handleVisuals(source, msg) {
           "<code>PAYMENT-SIGNATURE</code> header containing both signatures encoded in base64.</p>" +
           '<p class="dim">The Seller will parse this header and forward it to the Facilitator for settlement.</p>',
       );
-    }, 1000);
+    }, 1400);
   }
 
   // Step 5a: Seller requests verification from Facilitator
@@ -379,7 +379,7 @@ function handleVisuals(source, msg) {
           "5. Check payer has sufficient token balance</p>" +
           '<p class="dim">Verification is read-only — no nonce is consumed and no transaction is sent yet.</p>',
       );
-    }, 1200);
+    }, 1400);
   }
 
   // Step 5a result: Verification passed
@@ -390,7 +390,7 @@ function handleVisuals(source, msg) {
       facVerify.className = "detail-val ok";
       status(facStatus, "VERIFIED");
       log("fac", "POST /verify → 200 {isValid: true}");
-    }, 800);
+    }, 1400);
   }
 
   // Step 5b: Seller requests settlement
@@ -415,7 +415,7 @@ function handleVisuals(source, msg) {
           "which calls <code>SafeERC20.safeTransfer</code> to move tokens from Buyer to Seller.</p>" +
           '<p class="dim">This is the core of the Facilitator — it bridges HTTP payments to on-chain settlement.</p>',
       );
-    }, 1000);
+    }, 1400);
   }
 
   // Step 5b: Settlement confirmed
@@ -436,7 +436,7 @@ function handleVisuals(source, msg) {
         "fac",
         `POST /settle → 200 {tx: ${txHash.slice(0, 10)}...${txHash.slice(-6)}}`,
       );
-    }, 1000);
+    }, 1400);
 
     // Step 6: Deliver data
     enqueue(() => {
@@ -452,7 +452,7 @@ function handleVisuals(source, msg) {
           "containing the transaction hash as a receipt.</p>" +
           '<p class="dim">The Buyer received paid API data without ever paying gas or holding native tokens.</p>',
       );
-    }, 1200);
+    }, 1400);
   }
 
   // Completion: Buyer receives data
@@ -482,8 +482,10 @@ function handleVisuals(source, msg) {
     // Reset after showing result
     enqueue(() => {
       resetAll();
-      // Start button remains disabled as per "impossible to start a new script"
+      // Enable start button for retry
       startBtn.disabled = false;
+      startBtn.textContent = "RETRY";
+      startBtn.classList.add("btn-retry"); // Optional styling hook
       animating = false;
     }, 5000);
   }

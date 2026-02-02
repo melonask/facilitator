@@ -7,7 +7,7 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
-import tokenArtifact from "../test/MockERC20.json";
+import tokenArtifact from "../../contracts/out/ERC20Mock.sol/ERC20Mock.json";
 
 // Configuration
 const FACILITATOR_URL = process.env.FACILITATOR_URL || "http://localhost:3000";
@@ -61,11 +61,14 @@ Bun.serve({
         args: [sellerAccount.address],
       })) as bigint;
 
-      return Response.json({
-        address: sellerAccount.address,
-        eth: formatEther(ethBalance),
-        tokens: formatEther(tokenBalance),
-      }, { headers: corsHeaders });
+      return Response.json(
+        {
+          address: sellerAccount.address,
+          eth: formatEther(ethBalance),
+          tokens: formatEther(tokenBalance),
+        },
+        { headers: corsHeaders },
+      );
     }
 
     // --- Endpoint: Paid Resource ---
@@ -74,10 +77,12 @@ Bun.serve({
 
       if (!signatureHeader) {
         console.log(
-          "   [Agent 1] 🛑 Incoming request without payment. Sending 402.",
+          "   [Agent 1] 🔴 Incoming request without payment. Sending 402.",
         );
         return create402Response(corsHeaders);
       }
+
+      console.log("   [Agent 1] 🟢 Incoming request with payment.");
 
       try {
         const paymentPayload = JSON.parse(atob(signatureHeader));
@@ -102,7 +107,10 @@ Bun.serve({
             verifyData.invalidReason,
           );
           return new Response(
-            JSON.stringify({ error: "Verification Failed", details: verifyData }),
+            JSON.stringify({
+              error: "Verification Failed",
+              details: verifyData,
+            }),
             { status: 402, headers: corsHeaders },
           );
         }
@@ -146,12 +154,15 @@ Bun.serve({
           headers: {
             "Content-Type": "application/json",
             "PAYMENT-RESPONSE": btoa(JSON.stringify(settleData)),
-            ...corsHeaders
+            ...corsHeaders,
           },
         });
       } catch (e) {
         console.error("   [Agent 1] Server Error:", e);
-        return new Response("Internal Error", { status: 500, headers: corsHeaders });
+        return new Response("Internal Error", {
+          status: 500,
+          headers: corsHeaders,
+        });
       }
     }
 
@@ -220,7 +231,7 @@ function create402Response(corsHeaders: any) {
     headers: {
       "Content-Type": "application/json",
       "PAYMENT-REQUIRED": btoa(JSON.stringify(paymentRequired)),
-      ...corsHeaders
+      ...corsHeaders,
     },
   });
 }
