@@ -1,0 +1,31 @@
+{
+  "name": "@facilitator/eip7702",
+  "version": "0.3.0",
+  "description": "Self-hosted x402 payment facilitator server — verifies and settles any ERC-20 token (USDT, DAI, etc.)",
+  "type": "module",
+  "bin": {
+    "facilitator": "dist/bin/server.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/melonask/facilitator",
+    "directory": "packages/eip7702"
+  },
+  "homepage": "https://github.com/melonask/facilitator/tree/main/packages/eip7702#readme",
+  "license": "MIT",
+  "author": "melonask",
+  "dependencies": {
+    "@x402/core": "^2.2.0",
+    "viem": "^2.45.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit"
+  }
+}

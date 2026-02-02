@@ -1,4 +1,8 @@
-import type { SchemeNetworkClient, PaymentRequirements, PaymentPayload } from "@x402/fetch";
+import type {
+  PaymentPayload,
+  PaymentRequirements,
+  SchemeNetworkClient,
+} from "@x402/fetch";
 import type { Address, PrivateKeyAccount, TypedDataDomain } from "viem";
 
 export class Eip7702Scheme implements SchemeNetworkClient {
@@ -7,18 +11,18 @@ export class Eip7702Scheme implements SchemeNetworkClient {
   constructor(
     private account: PrivateKeyAccount,
     private chainId: number,
-    private delegateAddress: Address
+    private delegateAddress: Address,
   ) {}
 
   async createPaymentPayload(
     _version: number,
-    requirements: PaymentRequirements
+    requirements: PaymentRequirements,
   ): Promise<Pick<PaymentPayload, "x402Version" | "payload">> {
     if (requirements.scheme !== "eip7702") {
       throw new Error(`Unsupported scheme: ${requirements.scheme}`);
     }
 
-    console.log("   [Agent 2] ✍️  Signing EIP-712 Intent & EIP-7702 Auth...");
+    console.log("   [Agent 2] Signing EIP-712 Intent & EIP-7702 Auth...");
 
     const intent = {
       token: requirements.asset as Address,
@@ -61,24 +65,24 @@ export class Eip7702Scheme implements SchemeNetworkClient {
     });
 
     return {
-        x402Version: 2,
-        payload: {
-          authorization: {
-            contractAddress: authorization.address,
-            chainId: authorization.chainId,
-            nonce: authorization.nonce,
-            r: authorization.r,
-            s: authorization.s,
-            yParity: authorization.yParity,
-          },
-          intent: {
-            ...intent,
-            amount: intent.amount.toString(),
-            nonce: intent.nonce.toString(),
-            deadline: intent.deadline.toString(),
-          },
-          signature,
+      x402Version: 2,
+      payload: {
+        authorization: {
+          contractAddress: authorization.address,
+          chainId: authorization.chainId,
+          nonce: authorization.nonce,
+          r: authorization.r,
+          s: authorization.s,
+          yParity: authorization.yParity,
         },
-      };
+        intent: {
+          ...intent,
+          amount: intent.amount.toString(),
+          nonce: intent.nonce.toString(),
+          deadline: intent.deadline.toString(),
+        },
+        signature,
+      },
+    };
   }
 }

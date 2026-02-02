@@ -1,9 +1,15 @@
 {
   "name": "@facilitator/demo",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.3.0",
   "description": "Demo seller and buyer agents for the x402 EIP-7702 facilitator",
   "type": "module",
+  "bin": {
+    "facilitator-demo": "dist/demo.js"
+  },
+  "files": [
+    "dist",
+    "public"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/melonask/facilitator",
@@ -13,11 +19,15 @@
   "license": "MIT",
   "author": "melonask",
   "scripts": {
-    "demo": "bun run src/demo.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "demo": "node dist/demo.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@x402/fetch": "^2.2.0",
     "viem": "^2.45.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.0"
   }
 }

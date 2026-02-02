@@ -1,5 +1,9 @@
+#!/usr/bin/env node
 import { spawn } from "child_process";
 import path from "node:path";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import {
   createPublicClient,
   createWalletClient,
@@ -7,27 +11,30 @@ import {
   parseEther,
   type Hex,
 } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
+import { serve } from "./serve.js";
 
-// Import Artifacts (Relative to this file's execution location)
-import delegateArtifact from "../../contracts/out/Delegate.sol/Delegate.json";
-import tokenArtifact from "../../contracts/out/ERC20Mock.sol/ERC20Mock.json";
+const require = createRequire(import.meta.url);
+
+// Import Artifacts
+const delegateArtifact = require("../../contracts/out/Delegate.sol/Delegate.json");
+const tokenArtifact = require("../../contracts/out/ERC20Mock.sol/ERC20Mock.json");
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const ANVIL_PORT = 8545;
-const FACILITATOR_PORT = 3000;
-const AGENT1_PORT = 4000;
-const AGENT2_PORT = 4001;
+const FACILITATOR_PORT = 8080;
+const BUYER_PORT = 4000;
+const SELLER_PORT = 4001;
+const WEB_PORT = 3030;
 
 // Keys
 const DEPLOYER_KEY =
-  "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
-const RELAYER_KEY =
-  "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
-const SELLER_KEY =
-  "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a";
-const BUYER_KEY =
-  "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6";
+  "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"; // Anvil #0
+const RELAYER_KEY = generatePrivateKey();
+const SELLER_KEY = generatePrivateKey();
+const BUYER_KEY = generatePrivateKey();
 
 // ---- Pretty CLI helpers ----
 
@@ -38,7 +45,6 @@ const CYAN = "\x1b[36m";
 const GREEN = "\x1b[32m";
 const YELLOW = "\x1b[33m";
 const BLUE = "\x1b[34m";
-const RED = "\x1b[31m";
 const MAGENTA = "\x1b[35m";
 
 function banner() {
@@ -53,8 +59,8 @@ function topology(delegate: string, token: string) {
   const t = token.slice(0, 6) + ".." + token.slice(-4);
   console.log(`
 ${DIM}  ┌─────────────┐          ┌─────────────┐${RESET}
-${DIM}  │${RESET} ${BLUE}BUYER${RESET}       ${DIM}│${RESET}          ${DIM}│${RESET} ${RED}SELLER${RESET}      ${DIM}│${RESET}
-${DIM}  │${RESET}  :${AGENT2_PORT}      ${DIM}│ ◄─x402─► │${RESET}  :${AGENT1_PORT}      ${DIM}│${RESET}
+${DIM}  │${RESET} ${BLUE}BUYER${RESET}       ${DIM}│${RESET}          ${DIM}│${RESET} ${GREEN}SELLER${RESET}      ${DIM}│${RESET}
+${DIM}  │${RESET}  :${BUYER_PORT}      ${DIM}│ ◄─x402─► │${RESET}  :${SELLER_PORT}      ${DIM}│${RESET}
 ${DIM}  └─────────────┘          └──────┬──────┘${RESET}
 ${DIM}              ┌──────────────┐    │${RESET}
 ${DIM}              │${RESET} ${YELLOW}FACILITATOR${RESET}  ${DIM}│◄───┘${RESET}
@@ -68,7 +74,8 @@ ${DIM}  delegate ${CYAN}${d}${RESET}  ${DIM}token ${CYAN}${t}${RESET}`);
 }
 
 function step(n: number, label: string) {
-  console.log(`\n  ${DIM}[${n}]${RESET} ${label}`);
+  console.log(`
+  ${DIM}[${n}]${RESET} ${label}`);
 }
 
 function detail(label: string, value: string) {
@@ -79,30 +86,24 @@ function ok(msg: string) {
   console.log(`  ${GREEN}✓${RESET} ${msg}`);
 }
 
-function flowArrow(from: string, to: string, label: string) {
-  console.log(`      ${DIM}${from} ──► ${to}${RESET}  ${label}`);
-}
-
-function done() {
-  console.log(`
-${DIM}──────────────────────────────────────────────${RESET}
-  ${GREEN}${BOLD}Demo complete${RESET}
-${DIM}──────────────────────────────────────────────${RESET}`);
+function getMime(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeTypes: Record<string, string> = {
+    ".html": "text/html",
+    ".js": "application/javascript",
+    ".css": "text/css",
+    ".json": "application/json",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+  };
+  return mimeTypes[ext] || "application/octet-stream";
 }
 
 async function main() {
   banner();
 
-  const args = process.argv.slice(2);
-  const headless = args.includes("--no-web") || args.includes("--headless");
-
-  if (headless) {
-    detail("mode", "headless (no web visualizer)");
-  }
-
   // --- Web Mode State ---
-  let isWebMode = false;
-  const logClients: Set<any> = new Set();
+  const logClients: Set<ReadableStreamDefaultController> = new Set();
 
   function broadcastLog(source: string, message: string) {
     if (!message || !message.trim()) return;
@@ -116,79 +117,12 @@ async function main() {
     }
   }
 
-  function startWebServer() {
-    const WEB_PORT = 8080;
-    const publicDir = path.resolve(import.meta.dir, "../public");
-
-    Bun.serve({
-      port: WEB_PORT,
-      async fetch(req) {
-        const url = new URL(req.url);
-
-        // SSE Endpoint
-        if (url.pathname === "/logs") {
-          return new Response(
-            new ReadableStream({
-              start(controller) {
-                logClients.add(controller);
-              },
-              cancel(controller) {
-                logClients.delete(controller);
-              },
-            }),
-            {
-              headers: {
-                "Content-Type": "text/event-stream",
-                "Cache-Control": "no-cache",
-                Connection: "keep-alive",
-              },
-            },
-          );
-        }
-
-        // Static Files
-        let filePath = path.join(
-          publicDir,
-          url.pathname === "/" ? "index.html" : url.pathname,
-        );
-
-        // Safety check to prevent escaping public dir
-        if (!filePath.startsWith(publicDir)) {
-          return new Response("Forbidden", { status: 403 });
-        }
-
-        try {
-          const file = Bun.file(filePath);
-          if (await file.exists()) {
-            return new Response(file);
-          }
-          return new Response("Not Found", { status: 404 });
-        } catch (e) {
-          return new Response("Error", { status: 500 });
-        }
-      },
-    });
-
-    console.log(`
-${DIM}──────────────────────────────────────────────${RESET}
-  ${CYAN}Web Visualizer${RESET}  http://localhost:${WEB_PORT}
-${DIM}──────────────────────────────────────────────${RESET}
-  ${DIM}(keep this terminal open)${RESET}`);
-
-    spawn("open", [`http://localhost:${WEB_PORT}`]);
-  }
-
   // 1. Start Anvil
   step(1, "Starting Anvil");
   const anvil = spawn("anvil", ["--port", String(ANVIL_PORT)], {
     stdio: "ignore",
   });
-
-  process.on("SIGINT", () => {
-    anvil.kill();
-    process.exit();
-  });
-
+  process.on("SIGINT", () => { anvil.kill(); process.exit(); });
   await new Promise((r) => setTimeout(r, 2000));
   ok(`Anvil on :${ANVIL_PORT}`);
 
@@ -212,226 +146,164 @@ ${DIM}────────────────────────�
     await publicClient.waitForTransactionReceipt({ hash: deployDelegateHash })
   ).contractAddress!;
 
-  // Deploy Token
-  const deployTokenHash = await walletClient.deployContract({
+  // Deploy USDT (Generic Mock)
+  const deployUsdtHash = await walletClient.deployContract({
     account: deployer,
     abi: tokenArtifact.abi,
     bytecode: tokenArtifact.bytecode.object as Hex,
   });
-  const tokenAddress = (
-    await publicClient.waitForTransactionReceipt({ hash: deployTokenHash })
+  const usdtAddress = (
+    await publicClient.waitForTransactionReceipt({ hash: deployUsdtHash })
   ).contractAddress!;
 
-  // Mint to Buyer (1000 Tokens)
+  // Mint to Buyer (1000 USDT)
   await walletClient.writeContract({
     account: deployer,
-    address: tokenAddress,
+    address: usdtAddress,
     abi: tokenArtifact.abi,
     functionName: "mint",
     args: [buyer.address, parseEther("1000")],
   });
 
-  // Fund Relayer (10 ETH)
+  // Fund Relayer (1 ETH)
   await walletClient.sendTransaction({
     account: deployer,
     to: relayer.address,
-    value: parseEther("10"),
+    value: parseEther("1"),
   });
 
   detail("delegate", `${CYAN}${delegateAddress}${RESET}`);
-  detail("token", `${CYAN}${tokenAddress}${RESET}`);
-  detail("buyer", `1000 TKN minted`);
-  detail("relayer", `10 ETH funded`);
+  detail("token", `${CYAN}${usdtAddress}${RESET}`);
+  detail("buyer", `${buyer.address.slice(0, 6)}.. ${CYAN}1000 USDT${RESET}`);
+  detail("relayer", `${relayer.address.slice(0, 6)}.. ${CYAN}1 ETH${RESET}`);
 
-  topology(delegateAddress, tokenAddress);
+  topology(delegateAddress, usdtAddress);
 
-  // 3. Start Facilitator
-  step(3, "Starting Facilitator");
-  const facilitator = spawn(
-    "bun",
-    ["run", path.resolve(import.meta.dir, "../../server/src/index.ts")],
+  // 3. Start Agents
+  step(3, "Starting Agents");
+
+  // Buyer (Agent 2)
+  const buyerAgent = spawn(
+    process.execPath,
+    [path.resolve(__dirname, "buyer-server.js")],
     {
       env: {
         ...process.env,
-        PORT: String(FACILITATOR_PORT),
-        RELAYER_PRIVATE_KEY: RELAYER_KEY,
+        PORT: String(BUYER_PORT),
+        WEATHER_AGENT_URL: `http://localhost:${SELLER_PORT}/weather`,
+        BUYER_KEY: BUYER_KEY,
         DELEGATE_ADDRESS: delegateAddress,
-        [`RPC_URL_${foundry.id}`]: `http://127.0.0.1:${ANVIL_PORT}`,
+        TOKEN_ADDRESS: usdtAddress,
+        ANVIL_RPC: `http://127.0.0.1:${ANVIL_PORT}`,
       },
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: "pipe",
     },
   );
 
-  facilitator.stdout.on("data", (data) => {
+  // Seller (Agent 1)
+  const sellerAgent = spawn(
+    process.execPath,
+    [path.resolve(__dirname, "weather-server.js")],
+    {
+      env: {
+        ...process.env,
+        PORT: String(SELLER_PORT),
+        FACILITATOR_URL: `http://localhost:${FACILITATOR_PORT}`,
+        SELLER_KEY: SELLER_KEY,
+        TOKEN_ADDRESS: usdtAddress,
+        ANVIL_RPC: `http://127.0.0.1:${ANVIL_PORT}`,
+      },
+      stdio: "pipe",
+    },
+  );
+
+  // Stream logs
+  const handleLog = (agent: string, data: Buffer) => {
     const lines = data.toString().split("\n");
     for (const line of lines) {
       if (!line.trim()) continue;
+      broadcastLog(agent, line);
+    }
+  };
+
+  buyerAgent.stdout.on("data", (d: Buffer) => handleLog("Agent 2", d));
+  buyerAgent.stderr.on("data", (d: Buffer) => handleLog("Agent 2", d));
+  sellerAgent.stdout.on("data", (d: Buffer) => handleLog("Agent 1", d));
+  sellerAgent.stderr.on("data", (d: Buffer) => handleLog("Agent 1", d));
+
+  await new Promise((r) => setTimeout(r, 1000));
+  ok(`Buyer on :${BUYER_PORT}`);
+  ok(`Seller on :${SELLER_PORT}`);
+
+  // 4. Start UI
+  step(4, "Starting UI");
+
+  function startWebServer() {
+    const publicDir = path.resolve(__dirname, "../public");
+
+    serve(WEB_PORT, async (req) => {
+      const url = new URL(req.url);
+
+      if (url.pathname === "/logs") {
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              logClients.add(controller);
+            },
+            cancel(controller) {
+              logClients.delete(controller);
+            },
+          }),
+          {
+            headers: {
+              "Content-Type": "text/event-stream",
+              "Cache-Control": "no-cache",
+              Connection: "keep-alive",
+            },
+          },
+        );
+      }
+
+      let filePath = path.join(
+        publicDir,
+        url.pathname === "/" ? "index.html" : url.pathname,
+      );
+      if (!filePath.startsWith(publicDir))
+        return new Response("Forbidden", { status: 403 });
+
       try {
-        const log = JSON.parse(line);
-        if (log.msg === "Verifying payment...") {
-          flowArrow("seller", "facilitator", `${YELLOW}POST /verify${RESET}`);
-          broadcastLog("Facilitator", line);
-        } else if (log.msg === "Settling payment...") {
-          flowArrow("seller", "facilitator", `${YELLOW}POST /settle${RESET}`);
-          broadcastLog("Facilitator", line);
-        } else if (log.msg === "Settlement successful") {
-          const tx = log.hash
-            ? `${DIM}tx ${CYAN}${log.hash.slice(0, 10)}..${RESET}`
-            : "";
-          flowArrow("facilitator", "chain", `${GREEN}settled${RESET} ${tx}`);
-          broadcastLog("Facilitator", line);
-        } else {
-          broadcastLog("Facilitator", line);
-        }
+        const content = fs.readFileSync(filePath);
+        return new Response(content, {
+          headers: { "Content-Type": getMime(filePath) },
+        });
       } catch (e) {
-        broadcastLog("Facilitator", line);
+        return new Response("Not Found", { status: 404 });
       }
-    }
-  });
+    });
 
-  facilitator.stderr.on("data", (data) => {
-    process.stderr.write(data);
-    broadcastLog("Facilitator", data.toString());
-  });
-
-  await new Promise((r) => setTimeout(r, 1000));
-  ok(`Facilitator on :${FACILITATOR_PORT}`);
-
-  // 4. Start Agent 1 (Seller)
-  step(4, "Starting Seller agent");
-  const agent1 = spawn(
-    "bun",
-    ["run", path.resolve(import.meta.dir, "weather-server.ts")],
-    {
-      env: {
-        ...process.env,
-        PORT: String(AGENT1_PORT),
-        FACILITATOR_URL: `http://localhost:${FACILITATOR_PORT}`,
-        SELLER_KEY: SELLER_KEY,
-        TOKEN_ADDRESS: tokenAddress,
-        ANVIL_RPC: `http://127.0.0.1:${ANVIL_PORT}`,
-      },
-      stdio: "pipe",
-    },
-  );
-
-  await new Promise((r) => setTimeout(r, 1000));
-  ok(`Seller (weather) on :${AGENT1_PORT}`);
-
-  // 5. Start Agent 2 (Buyer)
-  step(5, "Starting Buyer agent");
-  const agent2 = spawn(
-    "bun",
-    ["run", path.resolve(import.meta.dir, "buyer-server.ts")],
-    {
-      env: {
-        ...process.env,
-        PORT: String(AGENT2_PORT),
-        WEATHER_AGENT_URL: `http://localhost:${AGENT1_PORT}/weather`,
-        BUYER_KEY: BUYER_KEY,
-        DELEGATE_ADDRESS: delegateAddress,
-        TOKEN_ADDRESS: tokenAddress,
-        ANVIL_RPC: `http://127.0.0.1:${ANVIL_PORT}`,
-      },
-      stdio: "pipe",
-    },
-  );
-  ok(`Buyer on :${AGENT2_PORT}`);
-
-  step(6, "Waiting for autonomous purchase");
-  console.log(`
-${DIM}  ── x402 protocol flow ──────────────────────${RESET}`);
-
-  // Monitor Agent 2 output
-  agent2.stdout.on("data", async (data) => {
-    const lines = data.toString().split("\n");
-    for (const line of lines) {
-      if (!line) continue;
-      broadcastLog("Agent 2", line);
-
-      if (line.includes("GET /weather")) {
-        flowArrow("buyer", "seller", `${BLUE}GET /weather${RESET}`);
-      } else if (line.includes("402")) {
-        flowArrow("seller", "buyer", `${RED}402 Payment Required${RESET}`);
-      } else if (line.includes("Signing") || line.includes("EIP-712")) {
-        detail("buyer", `${MAGENTA}sign EIP-712 + EIP-7702${RESET}`);
-      } else if (
-        line.includes("Retrying") ||
-        line.includes("Payment-Signature")
-      ) {
-        flowArrow("buyer", "seller", `${BLUE}GET /weather + payment${RESET}`);
-      } else if (line.includes("Data Received") || line.includes("weather")) {
-        flowArrow("seller", "buyer", `${GREEN}200 + data${RESET}`);
-
-        done();
-
-        // Check Bazaar Catalog
-        console.log(`\n  ${DIM}Bazaar catalog:${RESET}`);
-        try {
-          const res = await fetch(
-            `http://localhost:${FACILITATOR_PORT}/discovery/resources`,
-          );
-          const catalog = (await res.json()) as { items?: unknown[] };
-          detail("items", `${catalog.items?.length ?? 0} resource(s) indexed`);
-        } catch (e) {
-          detail("catalog", `${RED}unreachable${RESET}`);
-        }
-
-        if (!isWebMode) {
-          isWebMode = true;
-          clearTimeout(timeout);
-
-          if (headless) {
-            console.log(`\n  ${GREEN}Done.${RESET} Exiting.\n`);
-            cleanup();
-          } else {
-            startWebServer();
-          }
-        }
-      }
-    }
-  });
-
-  agent2.stderr.on("data", (data) => {
-    const lines = data.toString().split("\n");
-    for (const line of lines) {
-      if (!line) continue;
-      broadcastLog("Agent 2", line);
-    }
-  });
-
-  // Monitor Agent 1 output
-  agent1.stdout.on("data", (data) => {
-    const lines = data.toString().split("\n");
-    for (const line of lines) {
-      if (!line) continue;
-      broadcastLog("Agent 1", line);
-    }
-  });
-  agent1.stderr.on("data", (data) => {
-    const lines = data.toString().split("\n");
-    for (const line of lines) {
-      if (!line) continue;
-      broadcastLog("Agent 1", line);
-    }
-  });
-
-  // Timeout (Only applies to the initial run)
-  const timeout = setTimeout(() => {
-    if (!isWebMode) {
-      console.error(`\n  ${RED}Timed out${RESET}`);
-      cleanup();
-    }
-  }, 60000);
-
-  function cleanup() {
-    clearTimeout(timeout);
-    agent2.kill();
-    agent1.kill();
-    facilitator.kill();
-    anvil.kill();
-    process.exit(0);
+    console.log(`
+${DIM}──────────────────────────────────────────────${RESET}
+  ${CYAN}UI/UX${RESET}           http://localhost:${WEB_PORT}
+${DIM}──────────────────────────────────────────────${RESET}`);
   }
+
+  startWebServer();
+
+  // 5. Instructions
+  step(5, "Start Facilitator");
+  console.log(`
+${YELLOW}Run in a new terminal:${RESET}
+
+  ${CYAN}npx @facilitator/eip7702 \\
+    --relayer-key ${RELAYER_KEY} \\
+    --delegate-address ${delegateAddress} \\
+    --rpc-url http://127.0.0.1:${ANVIL_PORT}${RESET}
+
+Then open ${BOLD}http://localhost:${WEB_PORT}${RESET} and click ${BOLD}INITIATE${RESET}.
+`);
+
+  // Keep alive
+  setInterval(() => {}, 10000);
 }
 
 main().catch(console.error);

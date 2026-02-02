@@ -1,54 +1,85 @@
-# @facilitator/demo
+# x402 EIP-7702 Demo
 
-<img src="https://raw.githubusercontent.com/melonask/facilitator/refs/heads/main/packages/demo/public/demo.gif" alt="Web app showing demo agents for the x402 EIP-7702 proposal, automatic purchase between agents via API.">
+<img src="https://raw.githubusercontent.com/melonask/facilitator/refs/heads/main/packages/demo/public/demo.gif" alt="x402 EIP-7702 demo — autonomous agent-to-agent payment">
 
-Interactive web visualizer for the x402 EIP-7702 payment protocol. Runs a buyer agent, seller agent, and facilitator server locally, then animates each step of the protocol in real time.
-
-## What It Shows
-
-The demo runs a complete payment cycle between two automated agents:
-
-```
-  Buyer Agent             Seller Agent            Facilitator
-       |                       |                       |
-  1.   |--- GET /weather ----->|                       |
-  2.   |<-- 402 Payment Req ---|                       |
-  3.   | (signs EIP-712 + 7702)|                       |
-  4.   |--- GET + payment ---->|                       |
-  5.   |                       |--- verify + settle -->|
-       |                       |     (on-chain tx)     |
-  6.   |<-- 200 weather data --|<-- tx confirmed ------|
-```
-
-The web UI highlights each step with animated packet flows, signature status indicators, transaction hashes, and an explanation panel describing what's happening at each stage.
-
-## Prerequisites
-
-- [Bun](https://bun.sh) >= 1.1.0
-- [Foundry](https://book.getfoundry.sh/getting-started/installation) (for Anvil local chain)
+Interactive demo showing the x402 payment protocol with EIP-7702 gasless transfers. Includes autonomous buyer/seller agents and a real-time web visualization.
 
 ## Quick Start
 
+<details>
+  <summary>Requires: Foundry (for Anvil)</summary>
+
 ```bash
-git clone https://github.com/melonask/facilitator && cd facilitator
-bun install
-bun run demo
+curl -L https://foundry.paradigm.xyz | bash
 ```
 
-This starts all services and opens the visualizer.
+</details>
 
-## Ports
+```bash
+npx @facilitator/demo
+```
 
-| Service     | Port   | Description                               |
-| ----------- | ------ | ----------------------------------------- |
-| Demo UI     | `8080` | Web visualizer + SSE log stream           |
-| Seller      | `4000` | Weather API (returns 402 without payment) |
-| Buyer       | `4001` | Agent that auto-purchases from the seller |
-| Facilitator | `3000` | Payment verification + settlement         |
-| Anvil       | `8545` | Local Ethereum chain                      |
+> **Note:** You can also use `bunx`, `yarn dlx`, or `pnpm dlx` if you prefer.
 
-## UI Controls
+This starts Anvil, deploys contracts, funds accounts, starts agents and web UI, then prints a command to run the facilitator:
 
-- **INITIATE** -- trigger a manual purchase cycle
-- **AUTO / STEP** -- toggle between auto-play and step-through mode
-- **NEXT** -- advance one step (in step mode)
+```bash
+npx @facilitator/eip7702 --relayer-key 0x... --delegate-address 0x... --rpc-url http://127.0.0.1:8545
+```
+
+Run that in a **new terminal**, then open `http://localhost:3030` and click **INITIATE**.
+
+## Topology
+
+```
++------------------+              +------------------+
+|  BUYER AGENT     |              |  SELLER AGENT    |
+|  :4000           |---- x402 --->|  :4001           |
+|  (1000 USDT)     |              |  (weather API)   |
++------------------+              +--------+---------+
+                                           |
+                                  +--------v---------+
+                                  |  FACILITATOR     |
+                                  |  :8080           |
+                                  +--------+---------+
+                                           |
+                                  +--------v---------+
+                                  |  ANVIL           |
+                                  |  :8545           |
+                                  +------------------+
+
+                                  +------------------+
+                                  |  WEB UI          |
+                                  |  :3030           |
+                                  +------------------+
+```
+
+| Service      | Port | Description                            |
+| ------------ | ---- | -------------------------------------- |
+| Anvil        | 8545 | Local EVM chain (chain ID 31337)       |
+| Buyer Agent  | 4000 | Autonomous consumer with ERC-20 tokens |
+| Seller Agent | 4001 | Weather data provider (1 USDT/request) |
+| Facilitator  | 8080 | Payment verification and settlement    |
+| Web UI       | 3030 | Real-time protocol visualization       |
+
+## Web UI
+
+The web UI shows each step of the x402 protocol:
+
+1. **REQUEST** -- Buyer sends `GET /weather` to Seller
+2. **402 RESPONSE** -- Seller responds with payment requirements
+3. **SIGN** -- Buyer signs EIP-712 intent + EIP-7702 authorization
+4. **RETRY** -- Buyer resends with `PAYMENT-SIGNATURE` header
+5. **VERIFY + SETTLE** -- Facilitator verifies and submits Type 4 tx
+6. **DELIVER** -- Seller delivers weather data with tx receipt
+
+Features:
+
+- Auto/Step mode toggle for pacing
+- Real-time balance tracking
+- Signature and settlement detail panels
+- SSE-based log streaming
+
+## License
+
+MIT

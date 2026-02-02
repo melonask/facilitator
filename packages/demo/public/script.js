@@ -1,7 +1,7 @@
 // ---- Config ----
-const SELLER_URL = "http://localhost:4000";
-const BUYER_URL = "http://localhost:4001";
-const FAC_URL = "http://localhost:3000";
+const SELLER_URL = "http://localhost:4001";
+const BUYER_URL = "http://localhost:4000";
+const FAC_URL = "http://localhost:8080";
 
 // ---- DOM ----
 const $ = (s) => document.querySelector(s);
@@ -281,7 +281,7 @@ function handleVisuals(source, msg) {
         "<strong>Step 2: HTTP 402 Payment Required</strong>" +
           "<p>The Seller responds with status <code>402</code> and includes a " +
           "<code>PAYMENT-REQUIRED</code> header (base64-encoded JSON) specifying:</p>" +
-          "<p>Token address, amount (1 token), recipient, scheme (<code>eip7702</code>), " +
+          "<p>Token address, amount (1 USDT), recipient, scheme (<code>eip7702</code>), " +
           "and network (<code>eip155:31337</code>).</p>" +
           '<p class="dim">This is the x402 protocol — any HTTP server can become a paid API.</p>',
       );
@@ -470,7 +470,7 @@ function handleVisuals(source, msg) {
 
       explain(
         "<strong>Transaction Complete</strong>" +
-          "<p>The Buyer received the paid weather data. On-chain, 1 token was transferred " +
+          "<p>The Buyer received the paid weather data. On-chain, 1 USDT was transferred " +
           "from the Buyer to the Seller via EIP-7702 delegation.</p>" +
           "<p>The Facilitator's relayer paid the gas. The Buyer never needed native ETH.</p>" +
           '<p class="highlight">This works with any ERC-20 token — USDT, DAI, WETH — not just USDC.</p>',

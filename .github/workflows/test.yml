@@ -19,21 +19,25 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: npm install
+
+      - name: Build
+        run: npm run build
 
       - name: Type check
-        run: bun run typecheck
+        run: npm run typecheck
 
-      - name: Run tests
-        run: bun run test
+      - name: Test
+        run: npm run test
 
   solidity:
     name: Solidity
