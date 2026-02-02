@@ -1,5 +1,7 @@
 # @facilitator/eip7702
 
+<img src="https://raw.githubusercontent.com/melonask/facilitator/refs/heads/main/packages/demo/public/demo.gif" alt="x402 EIP-7702 demo — autonomous agent-to-agent payment">
+
 TypeScript implementation of the EIP-7702 payment scheme for the [x402](https://github.com/coinbase/x402) protocol. Plugs into `@x402/core` as a `SchemeNetworkFacilitator`.
 
 ## Installation
@@ -11,6 +13,19 @@ npm install @facilitator/eip7702
 > **Note:** You can also use `bun add`, `yarn add`, or `pnpm add` if you prefer.
 
 ## Usage
+
+### As a Standalone Server
+
+```bash
+npx @facilitator/eip7702 \
+  --relayer-key 0x... \
+  --delegate-address 0x... \
+  --rpc-url https://mainnet.infura.io/v3/...
+```
+
+> **Note:** You can also use `bunx`, `yarn dlx`, or `pnpm dlx` if you prefer.
+
+The chain ID is auto-detected from the RPC endpoint.
 
 ### As a Library
 
@@ -48,19 +63,6 @@ facilitator.register(["eip155:1"], mechanism);
 
 // Use facilitator.verify() and facilitator.settle()
 ```
-
-### As a Standalone Server
-
-```bash
-npx @facilitator/eip7702 \
-  --relayer-key 0x... \
-  --delegate-address 0x... \
-  --rpc-url https://mainnet.infura.io/v3/...
-```
-
-> **Note:** You can also use `bunx`, `yarn dlx`, or `pnpm dlx` if you prefer.
-
-The chain ID is auto-detected from the RPC endpoint.
 
 ### CLI Options
 

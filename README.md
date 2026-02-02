@@ -35,9 +35,9 @@ The facilitator acts as a trusted relayer between a buyer and seller. The buyer 
 
 ## Quick Start
 
-### Try the Demo
-
 <img src="https://raw.githubusercontent.com/melonask/facilitator/refs/heads/main/packages/demo/public/demo.gif" alt="x402 EIP-7702 demo — autonomous agent-to-agent payment">
+
+### Try the Demo
 
 <details>
   <summary>Requires: Foundry (for Anvil)</summary>
