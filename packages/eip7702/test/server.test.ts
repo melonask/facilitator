@@ -1,7 +1,7 @@
 import { x402Facilitator } from "@x402/core/facilitator";
 import { beforeEach, describe, it, mock } from "node:test";
 import assert from "node:assert/strict";
-import { createHandler } from "../src/bin/server.js";
+import { createHandler } from "../src/handler.js";
 
 describe("Facilitator Server Handler", () => {
   let mockFacilitator: x402Facilitator;
