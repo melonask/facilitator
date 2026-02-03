@@ -6,6 +6,8 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignerEIP7702} from "@openzeppelin/contracts/utils/cryptography/signers/SignerEIP7702.sol";
 import {ERC7739} from "@openzeppelin/contracts/utils/cryptography/signers/draft-ERC7739.sol";
+import {ERC721Holder} from "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
+import {ERC1155Holder} from "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 
 /**
  * @title EIP-7702 Delegate Account
@@ -18,7 +20,7 @@ import {ERC7739} from "@openzeppelin/contracts/utils/cryptography/signers/draft-
  *      Storage Layout: Uses ERC-7201 namespaced storage to prevent storage collisions
  *      if the user switches delegates or upgrades implementations.
  */
-contract Delegate is EIP712, SignerEIP7702, ERC7739 {
+contract Delegate is EIP712, SignerEIP7702, ERC7739, ERC721Holder, ERC1155Holder {
     using SafeERC20 for IERC20;
 
     // =============================================================
@@ -99,9 +101,9 @@ contract Delegate is EIP712, SignerEIP7702, ERC7739 {
             let ptr := mload(0x40)
 
             mstore(ptr, typeHash)
-            mstore(add(ptr, 0x20), token)
+            mstore(add(ptr, 0x20), and(token, 0xffffffffffffffffffffffffffffffffffffffff))
             mstore(add(ptr, 0x40), amount)
-            mstore(add(ptr, 0x60), to)
+            mstore(add(ptr, 0x60), and(to, 0xffffffffffffffffffffffffffffffffffffffff))
             mstore(add(ptr, 0x80), nonce)
             mstore(add(ptr, 0xa0), deadline)
 
@@ -137,7 +139,7 @@ contract Delegate is EIP712, SignerEIP7702, ERC7739 {
 
             mstore(ptr, typeHash)
             mstore(add(ptr, 0x20), amount)
-            mstore(add(ptr, 0x40), to)
+            mstore(add(ptr, 0x40), and(to, 0xffffffffffffffffffffffffffffffffffffffff))
             mstore(add(ptr, 0x60), nonce)
             mstore(add(ptr, 0x80), deadline)
 

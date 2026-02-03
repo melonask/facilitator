@@ -25,9 +25,14 @@ import {Delegate} from "@facilitator/contracts/Delegate.sol";
 ///   DEPLOY_SALT           - (Optional) 32-byte hex salt, defaults to zero
 contract DeployDelegate is Script {
     function run() external {
-        bytes32 salt = vm.envOr("DEPLOY_SALT", bytes32(0));
-        uint256 deployerKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
+        deploy(vm.envOr("DEPLOY_SALT", bytes32(0)));
+    }
 
+    function deploy(bytes32 salt) public {
+        deploy(salt, vm.envUint("DEPLOYER_PRIVATE_KEY"));
+    }
+
+    function deploy(bytes32 salt, uint256 deployerKey) public {
         bytes memory initCode = type(Delegate).creationCode;
         address predicted = _computeAddress(salt, keccak256(initCode));
 
@@ -41,16 +46,12 @@ contract DeployDelegate is Script {
         }
 
         vm.startBroadcast(deployerKey);
-        (bool success, bytes memory result) = CREATE2_FACTORY.call(abi.encodePacked(salt, initCode));
+        (bool success,) = CREATE2_FACTORY.call(abi.encodePacked(salt, initCode));
         vm.stopBroadcast();
 
-        require(success && result.length == 32, "CREATE2 deployment failed");
-        // casting to 'bytes32' is safe because result.length == 32 is checked above
-        // forge-lint: disable-next-line(unsafe-typecast)
-        address deployed = address(uint160(uint256(bytes32(result))));
-
-        require(deployed == predicted, "Address mismatch");
-        console.log("Deployed at   :", deployed);
+        require(success, "CREATE2 call failed");
+        require(predicted.code.length > 0, "CREATE2 deployment failed");
+        console.log("Deployed at   :", predicted);
     }
 
     function _computeAddress(bytes32 salt, bytes32 initCodeHash) internal pure returns (address) {

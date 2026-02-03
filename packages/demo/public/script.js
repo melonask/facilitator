@@ -3,6 +3,9 @@ const SELLER_URL = "http://localhost:4001";
 const BUYER_URL = "http://localhost:4000";
 const FAC_URL = "http://localhost:8080";
 
+// Animation duration for packets (ms)
+const PACKET_DURATION = 1000;
+
 // ---- DOM ----
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
@@ -56,11 +59,15 @@ const timelineSteps = [
 let animating = false;
 let prevBuyerTokens = null;
 let prevSellerTokens = null;
+let prevFacEth = null;
 let stepMode = false;
 let midX = 0,
   topY = 0,
   facY = 0,
   width = 0;
+
+// Track pending gas deduction (to show when tx is actually submitted)
+let pendingGasDeduction = false;
 
 // ---- Animation Queue ----
 const queue = [];
@@ -158,13 +165,51 @@ function hideMessage() {
   msgBar.classList.add("hidden");
 }
 
+// ---- Mobile tooltip handling ----
+function setupMobileTooltips() {
+  const steps = $$(".timeline-step[data-tooltip]");
+  let activeTooltip = null;
+
+  steps.forEach((step) => {
+    step.addEventListener("click", (e) => {
+      // Only for touch devices
+      if (window.matchMedia("(hover: none)").matches) {
+        e.preventDefault();
+
+        // Close any existing tooltip
+        if (activeTooltip && activeTooltip !== step) {
+          activeTooltip.classList.remove("tooltip-active");
+        }
+
+        // Toggle this tooltip
+        step.classList.toggle("tooltip-active");
+        activeTooltip = step.classList.contains("tooltip-active") ? step : null;
+      }
+    });
+  });
+
+  // Close tooltip when clicking elsewhere
+  document.addEventListener("click", (e) => {
+    if (activeTooltip && !e.target.closest(".timeline-step")) {
+      activeTooltip.classList.remove("tooltip-active");
+      activeTooltip = null;
+    }
+  });
+}
+
 // ---- Init ----
 function init() {
+  // Set initial inactive state for seller and facilitator
+  nodeSeller.classList.add("inactive");
+  nodeFac.classList.add("inactive");
+
   pollBalances();
   setInterval(pollBalances, 2500);
   pollHealth();
   setInterval(pollHealth, 5000);
   setupSSE();
+  setupMobileTooltips();
+
   startBtn.addEventListener("click", triggerPurchase);
   nextBtn.addEventListener("click", onNextClick);
   modeToggle.addEventListener("click", () => {
@@ -206,7 +251,14 @@ async function pollBalances() {
       sellerTokens.textContent = t;
     }
     if (f && f.networks && f.networks.length > 0) {
-      facEth.textContent = parseFloat(f.networks[0].eth).toFixed(4);
+      const newEth = parseFloat(f.networks[0].eth).toFixed(4);
+      // Only flash if we're tracking gas deduction during animation
+      if (pendingGasDeduction && prevFacEth !== null && prevFacEth !== newEth) {
+        flashGasDeducted(facEth);
+        pendingGasDeduction = false;
+      }
+      prevFacEth = newEth;
+      facEth.textContent = newEth;
     }
   } catch (_) {}
 }
@@ -214,6 +266,11 @@ async function pollBalances() {
 function flashValue(el) {
   el.classList.add("changed");
   setTimeout(() => el.classList.remove("changed"), 1500);
+}
+
+function flashGasDeducted(el) {
+  el.classList.add("deducted");
+  setTimeout(() => el.classList.remove("deducted"), 1500);
 }
 
 // ---- Trigger Purchase ----
@@ -256,27 +313,36 @@ function handleVisuals(source, msg) {
     enqueue(() => {
       resetAll();
       setTimeline(1);
-      animatePacket("buyer-seller");
+      // Buyer glows immediately (it's the initiator)
       glow(nodeBuyer, "buyer");
       status(buyerStatus, "REQUESTING...");
       showMessage("GET /weather →", "buyer");
+
+      // Animate packet to seller, activate seller on arrival
+      animatePacket("buyer-seller", () => {
+        activateNode(nodeSeller);
+      });
+
       explain(
         "<strong>Step 1: Initial Request</strong>" +
           "<p>The Buyer agent sends a <code>GET /weather</code> request to the Seller. " +
           "No payment headers are attached yet — this is a normal HTTP request.</p>" +
           '<p class="dim">The Seller will check for a PAYMENT-SIGNATURE header and reject with 402 if missing.</p>',
       );
-    }, 1400);
+    }, PACKET_DURATION + 400);
   }
 
   // Step 2: Seller sends 402
   if (source === "Agent 1" && msg.includes("Sending 402")) {
     enqueue(() => {
       setTimeline(2);
-      animatePacket("seller-buyer");
       glow(nodeSeller, "seller");
       status(sellerStatus, "402 SENT");
       showMessage("← 402 Payment Required", "seller");
+
+      // Animate packet back to buyer
+      animatePacket("seller-buyer");
+
       explain(
         "<strong>Step 2: HTTP 402 Payment Required</strong>" +
           "<p>The Seller responds with status <code>402</code> and includes a " +
@@ -285,7 +351,7 @@ function handleVisuals(source, msg) {
           "and network (<code>eip155:31337</code>).</p>" +
           '<p class="dim">This is the x402 protocol — any HTTP server can become a paid API.</p>',
       );
-    }, 1400);
+    }, PACKET_DURATION + 400);
   }
 
   // Step 2b: Buyer receives 402 and analyzes
@@ -333,16 +399,18 @@ function handleVisuals(source, msg) {
   if (source === "Agent 2" && msg.includes("Sending Signed Request")) {
     enqueue(() => {
       setTimeline(4);
-      animatePacket("buyer-seller");
       status(buyerStatus, "SENDING PAYMENT");
       showMessage("GET /weather + PAYMENT-SIGNATURE →", "buyer");
+
+      animatePacket("buyer-seller");
+
       explain(
         "<strong>Step 4: Retry with Payment</strong>" +
           "<p>The Buyer retries the same <code>GET /weather</code> request, now with a " +
           "<code>PAYMENT-SIGNATURE</code> header containing both signatures encoded in base64.</p>" +
           '<p class="dim">The Seller will parse this header and forward it to the Facilitator for settlement.</p>',
       );
-    }, 1400);
+    }, PACKET_DURATION + 400);
   }
 
   // Step 5a: Seller requests verification from Facilitator
@@ -350,21 +418,25 @@ function handleVisuals(source, msg) {
     enqueue(() => {
       setTimeline(5);
       hideMessage();
-      animatePacket("seller-fac");
       glow(nodeSeller, "seller");
-      glow(nodeFac, "fac");
       status(sellerStatus, "VERIFYING...");
-      status(facStatus, "VERIFYING");
-      facCore.classList.add("pulse");
       showMessage("POST /verify →  Facilitator", "fac");
 
-      facDetail.classList.remove("hidden");
-      facVerify.textContent = "Checking...";
-      facVerify.className = "detail-val pending";
-      facTxtype.textContent = "EIP-7702 Type 4";
-      facTxtype.className = "detail-val";
-      facTxhash.textContent = "--";
-      facTxhash.className = "detail-val mono";
+      // Animate packet to facilitator, activate it on arrival
+      animatePacket("seller-fac", () => {
+        activateNode(nodeFac);
+        glow(nodeFac, "fac");
+        status(facStatus, "VERIFYING");
+        facCore.classList.add("pulse");
+
+        facDetail.classList.remove("hidden");
+        facVerify.textContent = "Checking...";
+        facVerify.className = "detail-val pending";
+        facTxtype.textContent = "EIP-7702 Type 4";
+        facTxtype.className = "detail-val";
+        facTxhash.textContent = "--";
+        facTxhash.className = "detail-val mono";
+      });
 
       log("fac", "POST /verify → Facilitator");
 
@@ -379,7 +451,7 @@ function handleVisuals(source, msg) {
           "5. Check payer has sufficient token balance</p>" +
           '<p class="dim">Verification is read-only — no nonce is consumed and no transaction is sent yet.</p>',
       );
-    }, 1400);
+    }, PACKET_DURATION + 400);
   }
 
   // Step 5a result: Verification passed
@@ -390,19 +462,23 @@ function handleVisuals(source, msg) {
       facVerify.className = "detail-val ok";
       status(facStatus, "VERIFIED");
       log("fac", "POST /verify → 200 {isValid: true}");
-    }, 1400);
+    }, PACKET_DURATION + 400);
   }
 
   // Step 5b: Seller requests settlement
   if (source === "Agent 1" && msg.includes("Requesting Settlement")) {
     enqueue(() => {
       animatePacket("seller-fac");
+      glow(nodeFac, "fac");
       status(sellerStatus, "SETTLING...");
       status(facStatus, "SETTLING");
       facCore.classList.add("pulse");
       showMessage("POST /settle →  Facilitator", "fac");
       facTxhash.textContent = "pending...";
       facTxhash.className = "detail-val mono pending";
+
+      // Mark that we're expecting gas deduction
+      pendingGasDeduction = true;
 
       log("fac", "POST /settle → Facilitator");
 
@@ -415,7 +491,7 @@ function handleVisuals(source, msg) {
           "which calls <code>SafeERC20.safeTransfer</code> to move tokens from Buyer to Seller.</p>" +
           '<p class="dim">This is the core of the Facilitator — it bridges HTTP payments to on-chain settlement.</p>',
       );
-    }, 1400);
+    }, PACKET_DURATION + 400);
   }
 
   // Step 5b: Settlement confirmed
@@ -432,19 +508,28 @@ function handleVisuals(source, msg) {
       facCore.classList.remove("pulse");
       status(facStatus, "TX CONFIRMED");
       hideMessage();
+
+      // Flash gas deduction if it hasn't been detected yet
+      if (pendingGasDeduction) {
+        flashGasDeducted(facEth);
+        pendingGasDeduction = false;
+      }
+
       log(
         "fac",
         `POST /settle → 200 {tx: ${txHash.slice(0, 10)}...${txHash.slice(-6)}}`,
       );
-    }, 1400);
+    }, PACKET_DURATION + 400);
 
     // Step 6: Deliver data
     enqueue(() => {
       setTimeline(6);
-      animatePacket("seller-buyer");
       glow(nodeSeller, "seller");
       status(sellerStatus, "DELIVERING DATA");
       showMessage("← 200 + Weather Data", "seller");
+
+      animatePacket("seller-buyer");
+
       explain(
         "<strong>Step 6: Data Delivery</strong>" +
           "<p>The on-chain transfer is confirmed. The Seller now delivers the weather data " +
@@ -452,7 +537,7 @@ function handleVisuals(source, msg) {
           "containing the transaction hash as a receipt.</p>" +
           '<p class="dim">The Buyer received paid API data without ever paying gas or holding native tokens.</p>',
       );
-    }, 1400);
+    }, PACKET_DURATION + 400);
   }
 
   // Completion: Buyer receives data
@@ -485,7 +570,6 @@ function handleVisuals(source, msg) {
       // Enable start button for retry
       startBtn.disabled = false;
       startBtn.textContent = "RETRY";
-      startBtn.classList.add("btn-retry"); // Optional styling hook
       animating = false;
     }, 5000);
   }
@@ -513,11 +597,20 @@ function setTimeline(step) {
 
 function glow(node, type) {
   unglow(node);
+  node.classList.remove("inactive");
   node.classList.add("glow-" + type);
 }
 
 function unglow(node) {
   node.classList.remove("glow-buyer", "glow-seller", "glow-fac");
+}
+
+function activateNode(node) {
+  node.classList.remove("inactive");
+}
+
+function deactivateNode(node) {
+  node.classList.add("inactive");
 }
 
 function status(el, text) {
@@ -537,6 +630,14 @@ function resetAll() {
   [nodeBuyer, nodeSeller, nodeFac].forEach((n) => {
     unglow(n);
   });
+
+  // Deactivate seller and facilitator (they start inactive)
+  deactivateNode(nodeSeller);
+  deactivateNode(nodeFac);
+
+  // Buyer is always active
+  nodeBuyer.classList.remove("inactive");
+
   status(buyerStatus, "IDLE");
   status(sellerStatus, "LISTENING");
   status(facStatus, "READY");
@@ -552,6 +653,9 @@ function resetAll() {
   weatherResult.classList.add("hidden");
   facCore.classList.remove("pulse");
   hideMessage();
+
+  // Reset pending gas flag
+  pendingGasDeduction = false;
 
   // Explanation
   explain(
@@ -603,7 +707,7 @@ function drawConnections() {
               stroke="#1a1c22" stroke-width="2" stroke-dasharray="6,6" />
         <line x1="${midX}" y1="${topY}" x2="${midX}" y2="${facY}"
               stroke="#1a1c22" stroke-width="2" stroke-dasharray="6,6" />
-        
+
         <!-- Nodes (Visual anchors) -->
         <circle cx="0" cy="${topY}" r="3" fill="#1a1c22" />
         <circle cx="${w}" cy="${topY}" r="3" fill="#1a1c22" />
@@ -620,7 +724,7 @@ init();
 requestAnimationFrame(drawConnections);
 
 // ---- Animation ----
-function animatePacket(route) {
+function animatePacket(route, onComplete) {
   const svg = $("#conn-svg");
   const packet = document.createElementNS(
     "http://www.w3.org/2000/svg",
@@ -638,7 +742,6 @@ function animatePacket(route) {
   else color = "var(--accent)";
 
   packet.style.fill = color;
-  // Add glow using filter in CSS or direct style if needed, but CSS is better.
 
   svg.appendChild(packet);
 
@@ -661,7 +764,7 @@ function animatePacket(route) {
     "animateMotion",
   );
   anim.setAttribute("path", pathD);
-  anim.setAttribute("dur", "1.2s"); // Slightly slower for "beautiful" visualization
+  anim.setAttribute("dur", `${PACKET_DURATION}ms`);
   anim.setAttribute("fill", "freeze");
   anim.setAttribute("calcMode", "linear");
 
@@ -670,5 +773,7 @@ function animatePacket(route) {
 
   setTimeout(() => {
     if (packet.parentNode) packet.remove();
-  }, 1200);
+    // Call completion callback to activate the target node
+    if (onComplete) onComplete();
+  }, PACKET_DURATION);
 }
