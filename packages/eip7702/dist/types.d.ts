@@ -1,4 +1,4 @@
-import type { Address, Hex, PublicClient, WalletClient, Account } from "viem";
+import type { Account, Address, Hex, PublicClient, WalletClient } from "viem";
 export declare const ADDRESS_ZERO: "0x0000000000000000000000000000000000000000";
 export interface ClientProvider {
     getPublicClient(chainId: number): PublicClient;

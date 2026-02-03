@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-import { fileURLToPath } from "node:url";
-import path from "node:path";
-import { parseArgs } from "util";
 import { x402Facilitator } from "@x402/core/facilitator";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseArgs } from "util";
+import { createPublicClient, createWalletClient, defineChain, formatEther, http, } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { Eip7702Mechanism } from "../eip7702.js";
 import {} from "../types.js";
-import { createPublicClient, createWalletClient, http, formatEther, defineChain } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
 import { serve } from "./serve.js";
 // --- Simple InMemory Nonce Manager ---
 export class InMemoryNonceManager {
@@ -28,7 +28,11 @@ export function createHandler(facilitator, extra) {
         // CORS
         if (req.method === "OPTIONS") {
             return new Response(null, {
-                headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST", "Access-Control-Allow-Headers": "*" }
+                headers: {
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, POST",
+                    "Access-Control-Allow-Headers": "*",
+                },
             });
         }
         const headers = { "Access-Control-Allow-Origin": "*" };
@@ -37,7 +41,9 @@ export function createHandler(facilitator, extra) {
                 return Response.json({ status: "ok" }, { headers });
             }
             if (req.method === "GET" && url.pathname === "/info" && extra) {
-                const balance = await extra.publicClient.getBalance({ address: extra.relayerAddress });
+                const balance = await extra.publicClient.getBalance({
+                    address: extra.relayerAddress,
+                });
                 return Response.json({
                     networks: [{ eth: formatEther(balance) }],
                 }, { headers });
@@ -46,7 +52,7 @@ export function createHandler(facilitator, extra) {
                 return Response.json(facilitator.getSupported(), { headers });
             }
             if (req.method === "POST" && url.pathname === "/verify") {
-                const body = await req.json();
+                const body = (await req.json());
                 if (!body.paymentPayload || !body.paymentRequirements) {
                     return Response.json({ error: "Missing payload or requirements" }, { status: 400, headers });
                 }
@@ -54,7 +60,7 @@ export function createHandler(facilitator, extra) {
                 return Response.json(result, { headers });
             }
             if (req.method === "POST" && url.pathname === "/settle") {
-                const body = await req.json();
+                const body = (await req.json());
                 if (!body.paymentPayload || !body.paymentRequirements) {
                     return Response.json({ error: "Missing payload or requirements" }, { status: 400, headers });
                 }
@@ -117,11 +123,17 @@ async function main() {
     facilitator.register([`eip155:${chainId}`], mechanism);
     // --- Server ---
     console.log(`Starting EIP-7702 Facilitator on http://${HOST}:${PORT} (chain: ${chainId})`);
-    serve(PORT, HOST, createHandler(facilitator, { publicClient, relayerAddress: account.address }));
+    serve(PORT, HOST, createHandler(facilitator, {
+        publicClient,
+        relayerAddress: account.address,
+    }));
 }
 // Run main when executed directly (not imported)
 const __filename = fileURLToPath(import.meta.url);
 const runPath = process.argv[1] ? path.resolve(process.argv[1]) : "";
 if (runPath === __filename) {
-    main().catch((e) => { console.error(e); process.exit(1); });
+    main().catch((e) => {
+        console.error(e);
+        process.exit(1);
+    });
 }

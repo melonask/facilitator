@@ -17,7 +17,7 @@ import { Eip7702Scheme } from "./eip7702-client.js";
 import { serve } from "./serve.js";
 
 const require = createRequire(import.meta.url);
-const tokenArtifact = require("../../contracts/out/ERC20Mock.sol/ERC20Mock.json");
+const tokenArtifact = require("../public/abi/ERC20Mock.sol/ERC20Mock.json");
 
 // Configuration
 const PORT = process.env.PORT || 4001;

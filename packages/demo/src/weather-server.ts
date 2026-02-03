@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import {
   createPublicClient,
   formatEther,
@@ -7,11 +8,10 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
-import { createRequire } from "node:module";
 import { serve } from "./serve.js";
 
 const require = createRequire(import.meta.url);
-const tokenArtifact = require("../../contracts/out/ERC20Mock.sol/ERC20Mock.json");
+const tokenArtifact = require("../public/abi/ERC20Mock.sol/ERC20Mock.json");
 
 // Configuration
 const FACILITATOR_URL = process.env.FACILITATOR_URL || "http://localhost:3000";
@@ -130,10 +130,7 @@ serve(PORT, async (req) => {
       const settleData = (await settleRes.json()) as any;
 
       if (!settleData.success) {
-        console.log(
-          "   [Agent 1] Settlement Failed:",
-          settleData.errorReason,
-        );
+        console.log("   [Agent 1] Settlement Failed:", settleData.errorReason);
         return new Response(
           JSON.stringify({ error: "Settlement Failed", details: settleData }),
           { status: 402, headers: corsHeaders },

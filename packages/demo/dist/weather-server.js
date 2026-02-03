@@ -1,10 +1,10 @@
+import { createRequire } from "node:module";
 import { createPublicClient, formatEther, http, } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
-import { createRequire } from "node:module";
 import { serve } from "./serve.js";
 const require = createRequire(import.meta.url);
-const tokenArtifact = require("../../contracts/out/ERC20Mock.sol/ERC20Mock.json");
+const tokenArtifact = require("../public/abi/ERC20Mock.sol/ERC20Mock.json");
 // Configuration
 const FACILITATOR_URL = process.env.FACILITATOR_URL || "http://localhost:3000";
 const PORT = process.env.PORT || 4000;

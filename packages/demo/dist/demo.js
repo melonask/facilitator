@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 import { spawn } from "child_process";
-import path from "node:path";
 import fs from "node:fs";
-import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createPublicClient, createWalletClient, http, parseEther, } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
 import { serve } from "./serve.js";
 const require = createRequire(import.meta.url);
 // Import Artifacts
-const delegateArtifact = require("../../contracts/out/Delegate.sol/Delegate.json");
-const tokenArtifact = require("../../contracts/out/ERC20Mock.sol/ERC20Mock.json");
+const delegateArtifact = require("../public/abi/Delegate.sol/Delegate.json");
+const tokenArtifact = require("../public/abi/ERC20Mock.sol/ERC20Mock.json");
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ANVIL_PORT = 8545;
 const FACILITATOR_PORT = 8080;
@@ -100,7 +100,10 @@ async function main() {
     const anvil = spawn("anvil", ["--port", String(ANVIL_PORT)], {
         stdio: "ignore",
     });
-    process.on("SIGINT", () => { anvil.kill(); process.exit(); });
+    process.on("SIGINT", () => {
+        anvil.kill();
+        process.exit();
+    });
     await new Promise((r) => setTimeout(r, 2000));
     ok(`Anvil on :${ANVIL_PORT}`);
     // 2. Deploy & Fund

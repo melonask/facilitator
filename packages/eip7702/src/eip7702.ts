@@ -8,11 +8,8 @@ import type {
 import {
   encodeFunctionData,
   verifyTypedData,
-  type Account,
   type Address,
   type Hex,
-  type PublicClient,
-  type WalletClient,
 } from "viem";
 import { recoverAuthorizationAddress } from "viem/utils";
 import { DELEGATE_ABI, ERC20_ABI } from "./abi.js";
@@ -20,10 +17,9 @@ import {
   ADDRESS_ZERO,
   ErrorReason,
   type Eip7702Authorization,
+  type Eip7702Config,
   type Eip7702EthPayloadData,
   type Eip7702PayloadData,
-  type NonceManager,
-  type Eip7702Config,
 } from "./types.js";
 
 // --- Constants ---

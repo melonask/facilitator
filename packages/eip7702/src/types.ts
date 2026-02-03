@@ -1,4 +1,4 @@
-import type { Address, Hex, PublicClient, WalletClient, Account } from "viem";
+import type { Account, Address, Hex, PublicClient, WalletClient } from "viem";
 import { zeroAddress } from "viem";
 
 export const ADDRESS_ZERO = zeroAddress;

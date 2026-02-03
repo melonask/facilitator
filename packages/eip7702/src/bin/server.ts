@@ -1,13 +1,21 @@
 #!/usr/bin/env node
-import { fileURLToPath } from "node:url";
-import path from "node:path";
-import { parseArgs } from "util";
 import { x402Facilitator } from "@x402/core/facilitator";
+import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseArgs } from "util";
+import {
+  type Address,
+  type Hex,
+  createPublicClient,
+  createWalletClient,
+  defineChain,
+  formatEther,
+  http,
+} from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { Eip7702Mechanism } from "../eip7702.js";
 import { type NonceManager } from "../types.js";
-import { type Address, createPublicClient, createWalletClient, http, type Hex, formatEther, defineChain } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
-import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
 import { serve } from "./serve.js";
 
 // --- Simple InMemory Nonce Manager ---
@@ -24,14 +32,21 @@ export class InMemoryNonceManager implements NonceManager {
 }
 
 // --- Handler Factory ---
-export function createHandler(facilitator: x402Facilitator, extra?: { publicClient: any; relayerAddress: string }) {
+export function createHandler(
+  facilitator: x402Facilitator,
+  extra?: { publicClient: any; relayerAddress: string },
+) {
   return async (req: Request): Promise<Response> => {
     const url = new URL(req.url);
 
     // CORS
     if (req.method === "OPTIONS") {
       return new Response(null, {
-        headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST", "Access-Control-Allow-Headers": "*" }
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST",
+          "Access-Control-Allow-Headers": "*",
+        },
       });
     }
 
@@ -43,10 +58,15 @@ export function createHandler(facilitator: x402Facilitator, extra?: { publicClie
       }
 
       if (req.method === "GET" && url.pathname === "/info" && extra) {
-        const balance = await extra.publicClient.getBalance({ address: extra.relayerAddress as Address });
-        return Response.json({
-          networks: [{ eth: formatEther(balance) }],
-        }, { headers });
+        const balance = await extra.publicClient.getBalance({
+          address: extra.relayerAddress as Address,
+        });
+        return Response.json(
+          {
+            networks: [{ eth: formatEther(balance) }],
+          },
+          { headers },
+        );
       }
 
       if (req.method === "GET" && url.pathname === "/supported") {
@@ -54,20 +74,38 @@ export function createHandler(facilitator: x402Facilitator, extra?: { publicClie
       }
 
       if (req.method === "POST" && url.pathname === "/verify") {
-        const body = await req.json() as { paymentPayload: PaymentPayload; paymentRequirements: PaymentRequirements };
+        const body = (await req.json()) as {
+          paymentPayload: PaymentPayload;
+          paymentRequirements: PaymentRequirements;
+        };
         if (!body.paymentPayload || !body.paymentRequirements) {
-            return Response.json({ error: "Missing payload or requirements" }, { status: 400, headers });
+          return Response.json(
+            { error: "Missing payload or requirements" },
+            { status: 400, headers },
+          );
         }
-        const result = await facilitator.verify(body.paymentPayload, body.paymentRequirements);
+        const result = await facilitator.verify(
+          body.paymentPayload,
+          body.paymentRequirements,
+        );
         return Response.json(result, { headers });
       }
 
       if (req.method === "POST" && url.pathname === "/settle") {
-        const body = await req.json() as { paymentPayload: PaymentPayload; paymentRequirements: PaymentRequirements };
+        const body = (await req.json()) as {
+          paymentPayload: PaymentPayload;
+          paymentRequirements: PaymentRequirements;
+        };
         if (!body.paymentPayload || !body.paymentRequirements) {
-            return Response.json({ error: "Missing payload or requirements" }, { status: 400, headers });
+          return Response.json(
+            { error: "Missing payload or requirements" },
+            { status: 400, headers },
+          );
         }
-        const result = await facilitator.settle(body.paymentPayload, body.paymentRequirements);
+        const result = await facilitator.settle(
+          body.paymentPayload,
+          body.paymentRequirements,
+        );
         return Response.json(result, { headers });
       }
 
@@ -94,7 +132,9 @@ async function main() {
   });
 
   if (!args["relayer-key"] || !args["delegate-address"] || !args["rpc-url"]) {
-    console.error("Missing required arguments: --relayer-key, --delegate-address, --rpc-url");
+    console.error(
+      "Missing required arguments: --relayer-key, --delegate-address, --rpc-url",
+    );
     process.exit(1);
   }
 
@@ -122,7 +162,8 @@ async function main() {
 
   const clientProvider = {
     getPublicClient: (_: number) => publicClient,
-    getWalletClient: (_: number) => createWalletClient({ chain, transport: http(RPC_URL), account }),
+    getWalletClient: (_: number) =>
+      createWalletClient({ chain, transport: http(RPC_URL), account }),
   };
 
   const mechanism = new Eip7702Mechanism({
@@ -136,14 +177,26 @@ async function main() {
   facilitator.register([`eip155:${chainId}`], mechanism);
 
   // --- Server ---
-  console.log(`Starting EIP-7702 Facilitator on http://${HOST}:${PORT} (chain: ${chainId})`);
+  console.log(
+    `Starting EIP-7702 Facilitator on http://${HOST}:${PORT} (chain: ${chainId})`,
+  );
 
-  serve(PORT, HOST, createHandler(facilitator, { publicClient, relayerAddress: account.address }));
+  serve(
+    PORT,
+    HOST,
+    createHandler(facilitator, {
+      publicClient,
+      relayerAddress: account.address,
+    }),
+  );
 }
 
 // Run main when executed directly (not imported)
 const __filename = fileURLToPath(import.meta.url);
 const runPath = process.argv[1] ? path.resolve(process.argv[1]) : "";
 if (runPath === __filename) {
-  main().catch((e) => { console.error(e); process.exit(1); });
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
 }
