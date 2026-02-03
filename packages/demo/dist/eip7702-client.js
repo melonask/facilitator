@@ -48,6 +48,7 @@ export class Eip7702Scheme {
             chainId: this.chainId,
             nonce: 0, // In prod, query nonce
         });
+        console.log("   [Agent 2] Sending Signed Request");
         return {
             x402Version: 2,
             payload: {

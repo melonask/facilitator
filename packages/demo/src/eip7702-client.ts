@@ -64,6 +64,8 @@ export class Eip7702Scheme implements SchemeNetworkClient {
       nonce: 0, // In prod, query nonce
     });
 
+    console.log("   [Agent 2] Sending Signed Request");
+
     return {
       x402Version: 2,
       payload: {

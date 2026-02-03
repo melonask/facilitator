@@ -261,9 +261,8 @@ main {
   align-items: stretch;
   gap: 0;
   min-height: 0;
-  max-width: 1400px;
-  margin: 0 auto;
   width: 100%;
+  justify-content: space-between;
 }
 
 /* Node Cards */
@@ -277,7 +276,6 @@ main {
   transition: all 0.5s ease;
   width: 30%;
   min-width: 140px;
-  max-width: 320px;
   flex-shrink: 1;
 }
 
@@ -585,7 +583,6 @@ main {
   justify-content: flex-end;
   padding-bottom: 0;
   min-width: 200px;
-  max-width: 400px;
 }
 
 .connections svg {
@@ -603,7 +600,6 @@ main {
   margin-top: auto;
   margin-bottom: 0;
   width: 95%;
-  max-width: 280px;
 }
 
 .fac-core {
