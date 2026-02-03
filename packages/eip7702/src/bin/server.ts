@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 import { x402Facilitator } from "@x402/core/facilitator";
 import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { parseArgs } from "util";
 import {
   type Address,
@@ -191,12 +189,7 @@ async function main() {
   );
 }
 
-// Run main when executed directly (not imported)
-const __filename = fileURLToPath(import.meta.url);
-const runPath = process.argv[1] ? path.resolve(process.argv[1]) : "";
-if (runPath === __filename) {
-  main().catch((e) => {
-    console.error(e);
-    process.exit(1);
-  });
-}
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

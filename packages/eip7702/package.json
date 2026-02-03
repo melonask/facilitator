@@ -1,6 +1,6 @@
 {
   "name": "@facilitator/eip7702",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Self-hosted x402 payment facilitator server — verifies and settles any ERC-20 token (USDT, DAI, etc.)",
   "type": "module",
   "bin": {

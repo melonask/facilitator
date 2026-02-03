@@ -1,6 +1,6 @@
 {
   "name": "@facilitator/demo",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Demo seller and buyer agents for the x402 EIP-7702 facilitator",
   "type": "module",
   "bin": {

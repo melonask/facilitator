@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 import { x402Facilitator } from "@x402/core/facilitator";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { parseArgs } from "util";
 import { createPublicClient, createWalletClient, defineChain, formatEther, http, } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -128,12 +126,7 @@ async function main() {
         relayerAddress: account.address,
     }));
 }
-// Run main when executed directly (not imported)
-const __filename = fileURLToPath(import.meta.url);
-const runPath = process.argv[1] ? path.resolve(process.argv[1]) : "";
-if (runPath === __filename) {
-    main().catch((e) => {
-        console.error(e);
-        process.exit(1);
-    });
-}
+main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+});
