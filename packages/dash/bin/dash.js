@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import serve from 'serve';
 import path from 'path';
 import { fileURLToPath } from 'url';
 

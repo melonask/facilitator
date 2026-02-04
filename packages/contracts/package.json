@@ -1,6 +1,6 @@
 {
   "name": "@facilitator/contracts",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "private": true,
   "description": "EIP-7702 Delegate contract for x402 gasless payment intents",
   "repository": {
