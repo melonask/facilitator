@@ -33,6 +33,7 @@ The facilitator acts as a trusted relayer between a buyer and seller. The buyer 
 | ------------------------------------------ | ----------------------------------------------------------------------- |
 | [`packages/contracts`](packages/contracts) | Solidity `Delegate.sol` — EIP-7702 delegate for gasless payment intents |
 | [`packages/eip7702`](packages/eip7702)     | TypeScript facilitator server — verify + settle via `viem`              |
+| [`packages/dash`](packages/dash)           | Real-time dashboard for monitoring facilitator balances and transactions |
 | [`packages/demo`](packages/demo)           | Interactive demo with buyer/seller agents and real-time web UI          |
 
 ## Quick Start
