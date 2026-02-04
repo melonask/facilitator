@@ -1,5 +1,7 @@
 # x402 Facilitator
 
+<img src="https://raw.githubusercontent.com/melonask/facilitator/refs/heads/main/packages/dash/public/src.png" alt="x402 EIP-7702 Facilitator Dashboard">
+
 Self-hosted EIP-7702 payment facilitator for the [x402](https://github.com/coinbase/x402) protocol. Enables gasless ERC-20 (USDT, DAI, etc.) and native ETH transfers on any EVM chain.
 
 ## How It Works
@@ -61,6 +63,12 @@ npx @facilitator/eip7702 --relayer-key 0x... --delegate-address 0x... --rpc-url 
 ```
 
 Open `http://localhost:3030` and click **INITIATE**.
+
+### Facilitator Dashboard
+
+```bash
+npx @facilitator/dash
+```
 
 ### Deploy Your Own
 

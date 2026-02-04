@@ -1,6 +1,6 @@
 {
   "name": "facilitator",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "private": true,
   "type": "module",
   "description": "Self-hosted x402 payment facilitator server — verifies and settles any ERC-20 token (USDT, DAI, etc.)",
@@ -16,6 +16,7 @@
   "author": "melonask",
   "workspaces": [
     "packages/demo",
+    "packages/dash",
     "packages/eip7702"
   ],
   "scripts": {

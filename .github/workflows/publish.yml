@@ -66,3 +66,16 @@ jobs:
         if: ${{ inputs.dry-run == true }}
         run: npm publish --access public --dry-run
         working-directory: packages/demo
+
+      # --- Dash ---
+      - name: Publish dash
+        if: ${{ inputs.dry-run != true }}
+        run: npm publish --access public
+        working-directory: packages/dash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish dash (dry run)
+        if: ${{ inputs.dry-run == true }}
+        run: npm publish --access public --dry-run
+        working-directory: packages/dash
