@@ -5,6 +5,7 @@ import { foundry } from "viem/chains";
 import { serve } from "./serve.js";
 const require = createRequire(import.meta.url);
 const tokenArtifact = require("../public/abi/ERC20Mock.sol/ERC20Mock.json");
+const eip3009Artifact = require("../public/abi/EIP3009Mock.sol/EIP3009Mock.json");
 // Configuration
 const FACILITATOR_URL = process.env.FACILITATOR_URL || "http://localhost:3000";
 const PORT = process.env.PORT || 4000;
@@ -14,8 +15,11 @@ const ANVIL_RPC = process.env.ANVIL_RPC || "http://127.0.0.1:8545";
 const SELLER_KEY = process.env.SELLER_KEY ||
     "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a";
 const sellerAccount = privateKeyToAccount(SELLER_KEY);
-// Token
+// Tokens
 const TOKEN_ADDRESS = process.env.TOKEN_ADDRESS;
+const USDC_ADDRESS = process.env.USDC_ADDRESS;
+const USDC_NAME = process.env.USDC_NAME || "EIP3009Mock";
+const USDC_VERSION = process.env.USDC_VERSION || "1";
 if (!TOKEN_ADDRESS)
     throw new Error("TOKEN_ADDRESS env var required");
 // Clients
@@ -23,7 +27,9 @@ const transport = http(ANVIL_RPC);
 const publicClient = createPublicClient({ chain: foundry, transport });
 console.log(`\nAgent 1 (Seller) running on port ${PORT}`);
 console.log(`   Address: ${sellerAccount.address}`);
-console.log(`   Token: ${TOKEN_ADDRESS}`);
+console.log(`   USDT: ${TOKEN_ADDRESS}`);
+if (USDC_ADDRESS)
+    console.log(`   USDC: ${USDC_ADDRESS}`);
 serve(PORT, async (req) => {
     const url = new URL(req.url);
     // CORS Headers
@@ -37,19 +43,25 @@ serve(PORT, async (req) => {
     }
     // --- Endpoint: Balance Tracking ---
     if (url.pathname === "/balance") {
-        const ethBalance = await publicClient.getBalance({
-            address: sellerAccount.address,
-        });
         const tokenBalance = (await publicClient.readContract({
             address: TOKEN_ADDRESS,
             abi: tokenArtifact.abi,
             functionName: "balanceOf",
             args: [sellerAccount.address],
         }));
+        let usdcBalance = 0n;
+        if (USDC_ADDRESS) {
+            usdcBalance = (await publicClient.readContract({
+                address: USDC_ADDRESS,
+                abi: eip3009Artifact.abi,
+                functionName: "balanceOf",
+                args: [sellerAccount.address],
+            }));
+        }
         return Response.json({
             address: sellerAccount.address,
-            eth: formatEther(ethBalance),
-            tokens: formatEther(tokenBalance),
+            usdt: formatEther(tokenBalance),
+            usdc: formatEther(usdcBalance),
         }, { headers: corsHeaders });
     }
     // --- Endpoint: Paid Resource ---
@@ -62,7 +74,13 @@ serve(PORT, async (req) => {
         console.log("   [Agent 1] Incoming request with payment.");
         try {
             const paymentPayload = JSON.parse(atob(signatureHeader));
-            const requirements = createRequirements();
+            // Determine which scheme was used from the payload
+            const scheme = paymentPayload.payload?.authorization?.from
+                ? "exact"
+                : "eip7702";
+            const requirements = scheme === "exact"
+                ? createUsdcRequirements()
+                : createUsdtRequirements();
             const requestBody = JSON.stringify({
                 paymentPayload,
                 paymentRequirements: requirements,
@@ -95,13 +113,15 @@ serve(PORT, async (req) => {
                 console.log("   [Agent 1] Settlement Failed:", settleData.errorReason);
                 return new Response(JSON.stringify({ error: "Settlement Failed", details: settleData }), { status: 402, headers: corsHeaders });
             }
-            console.log(`   [Agent 1] Settlement Confirmed! Tx: ${settleData.transaction}`);
-            // 2. Deliver
+            const tokenUsed = scheme === "exact" ? "USDC (ERC-3009)" : "USDT (EIP-7702)";
+            console.log(`   [Agent 1] Settlement Confirmed! Token: ${tokenUsed} Tx: ${settleData.transaction}`);
+            // 3. Deliver
             const weatherData = {
                 location: "San Francisco",
                 temperature: 72,
                 condition: "Sunny",
                 paid: true,
+                token: tokenUsed,
                 txHash: settleData.transaction,
             };
             return new Response(JSON.stringify(weatherData), {
@@ -122,7 +142,7 @@ serve(PORT, async (req) => {
     }
     return new Response("Not Found", { status: 404, headers: corsHeaders });
 });
-function createRequirements() {
+function createUsdtRequirements() {
     return {
         scheme: "eip7702",
         network: `eip155:${CHAIN_ID}`,
@@ -133,8 +153,25 @@ function createRequirements() {
         extra: {},
     };
 }
+function createUsdcRequirements() {
+    return {
+        scheme: "exact",
+        network: `eip155:${CHAIN_ID}`,
+        asset: USDC_ADDRESS,
+        amount: (10n ** 18n).toString(), // 1 Token
+        payTo: sellerAccount.address,
+        maxTimeoutSeconds: 300,
+        extra: {
+            name: USDC_NAME,
+            version: USDC_VERSION,
+        },
+    };
+}
 function create402Response(corsHeaders) {
-    const requirements = createRequirements();
+    const accepts = [createUsdtRequirements()];
+    if (USDC_ADDRESS) {
+        accepts.push(createUsdcRequirements());
+    }
     const paymentRequired = {
         x402Version: 2,
         error: "Payment required",
@@ -143,7 +180,7 @@ function create402Response(corsHeaders) {
             description: "Weather Data",
             mimeType: "application/json",
         },
-        accepts: [requirements],
+        accepts,
         extensions: {
             // Bazaar Discovery Extension
             bazaar: {

@@ -24,9 +24,12 @@ import {Delegate} from "@facilitator/contracts/Delegate.sol";
 ///   DEPLOYER_PRIVATE_KEY  - Private key of the account paying for gas
 ///   DEPLOY_SALT           - (Optional) 32-byte hex salt, defaults to zero
 contract DeployDelegate is Script {
+    // The salt used to generate the deterministic address 0xD064939e706dC03699dB7Fe58bB0553afDF39fDd
+    bytes32 constant DEFAULT_SALT = 0xcabb92b3cbd6ab7eeb40c1a3415b7c452a7e3e900d53a9eb466f56e44018d5c7;
+
     function run() external {
         uint256 deployerKey = vm.envOr("DEPLOYER_PRIVATE_KEY", uint256(0));
-        deploy(vm.envOr("DEPLOY_SALT", bytes32(0)), deployerKey);
+        deploy(vm.envOr("DEPLOY_SALT", DEFAULT_SALT), deployerKey);
     }
 
     function deploy(bytes32 salt) public {

@@ -1,10 +1,10 @@
 {
   "name": "@facilitator/demo",
-  "version": "0.3.10",
-  "description": "Demo seller and buyer agents for the x402 EIP-7702 facilitator",
+  "version": "0.4.0",
+  "description": "Demo seller and buyer agents for the x402 multi-mechanism facilitator (EIP-7702 + ERC-3009)",
   "type": "module",
   "bin": {
-    "facilitator-demo": "dist/demo.js"
+    "facilitator-demo": "dist/bin/demo.js"
   },
   "files": [
     "dist",
@@ -20,7 +20,7 @@
   "author": "melonask",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "demo": "node dist/demo.js",
+    "demo": "node dist/bin/demo.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

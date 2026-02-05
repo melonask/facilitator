@@ -14,10 +14,12 @@ import { privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
 import { createRequire } from "node:module";
 import { Eip7702Scheme } from "./eip7702-client.js";
+import { Eip3009Scheme } from "./eip3009-client.js";
 import { serve } from "./serve.js";
 
 const require = createRequire(import.meta.url);
 const tokenArtifact = require("../public/abi/ERC20Mock.sol/ERC20Mock.json");
+const eip3009Artifact = require("../public/abi/EIP3009Mock.sol/EIP3009Mock.json");
 
 // Configuration
 const PORT = process.env.PORT || 4001;
@@ -35,6 +37,7 @@ const buyerAccount = privateKeyToAccount(BUYER_KEY);
 // Contract Addresses
 const DELEGATE_ADDRESS = process.env.DELEGATE_ADDRESS as Address;
 const TOKEN_ADDRESS = process.env.TOKEN_ADDRESS as Address;
+const USDC_ADDRESS = process.env.USDC_ADDRESS as Address;
 if (!DELEGATE_ADDRESS || !TOKEN_ADDRESS)
   throw new Error("Addresses env vars required");
 
@@ -51,15 +54,30 @@ console.log(`
 Agent 2 (Buyer) running on port ${PORT}`);
 console.log(`   Address: ${buyerAccount.address}`);
 
-// Initialize wrapped fetch with payment config
-const fetchWithPayment = wrapFetchWithPaymentFromConfig(fetch, {
+// Initialize wrapped fetch for EIP-7702 (USDT)
+const fetchWithUsdt = wrapFetchWithPaymentFromConfig(fetch, {
   schemes: [
     {
-      network: "eip155:31337", // Anvil
+      network: "eip155:31337",
       client: new Eip7702Scheme(buyerAccount, CHAIN_ID, DELEGATE_ADDRESS),
     },
   ],
 });
+
+// Initialize wrapped fetch for ERC-3009 (USDC)
+const fetchWithUsdc = USDC_ADDRESS
+  ? wrapFetchWithPaymentFromConfig(fetch, {
+      schemes: [
+        {
+          network: "eip155:31337",
+          client: new Eip3009Scheme(buyerAccount, CHAIN_ID),
+        },
+      ],
+    })
+  : null;
+
+// Track purchase count for alternating
+let purchaseCount = 0;
 
 // Start Server
 serve(PORT, async (req) => {
@@ -78,9 +96,6 @@ serve(PORT, async (req) => {
 
   // --- Endpoint: Balance Tracking ---
   if (url.pathname === "/balance") {
-    const ethBalance = await publicClient.getBalance({
-      address: buyerAccount.address,
-    });
     const tokenBalance = (await publicClient.readContract({
       address: TOKEN_ADDRESS,
       abi: tokenArtifact.abi,
@@ -88,11 +103,21 @@ serve(PORT, async (req) => {
       args: [buyerAccount.address],
     })) as bigint;
 
+    let usdcBalance = 0n;
+    if (USDC_ADDRESS) {
+      usdcBalance = (await publicClient.readContract({
+        address: USDC_ADDRESS,
+        abi: eip3009Artifact.abi,
+        functionName: "balanceOf",
+        args: [buyerAccount.address],
+      })) as bigint;
+    }
+
     return Response.json(
       {
         address: buyerAccount.address,
-        eth: formatEther(ethBalance),
-        tokens: formatEther(tokenBalance),
+        usdt: formatEther(tokenBalance),
+        usdc: formatEther(usdcBalance),
       },
       { headers: corsHeaders },
     );
@@ -100,8 +125,15 @@ serve(PORT, async (req) => {
 
   // --- Endpoint: Manual Trigger ---
   if (url.pathname === "/buy") {
-    // Trigger asynchronously
-    buyWeather();
+    const tokenParam = url.searchParams.get("token");
+    const useUsdc =
+      tokenParam === "usdc"
+        ? true
+        : tokenParam === "usdt"
+          ? false
+          : purchaseCount % 2 === 1; // alternate by default
+
+    buyWeather(useUsdc);
     return new Response("Purchase initiated check console", {
       headers: corsHeaders,
     });
@@ -110,18 +142,36 @@ serve(PORT, async (req) => {
   return new Response("Not Found", { status: 404, headers: corsHeaders });
 });
 
-async function buyWeather() {
+async function buyWeather(useUsdc: boolean) {
   try {
-    console.log("   [Agent 2] Contacting Agent 1 for Weather...");
+    purchaseCount++;
 
-    const res = await fetchWithPayment(WEATHER_AGENT_URL);
-    const data = await res.json();
-    console.log("   [Agent 2] Data Received:", data);
+    if (useUsdc && fetchWithUsdc) {
+      console.log("   [Agent 2] Paying with USDC (ERC-3009)");
+      console.log("   [Agent 2] Contacting Agent 1 for Weather...");
 
-    const paymentResponse = res.headers.get("PAYMENT-RESPONSE");
-    if (paymentResponse) {
-      const decoded = decodePaymentResponseHeader(paymentResponse);
-      console.log(`   [Agent 2] Tx Hash: ${decoded.transaction}`);
+      const res = await fetchWithUsdc(WEATHER_AGENT_URL);
+      const data = await res.json();
+      console.log("   [Agent 2] Data Received:", data);
+
+      const paymentResponse = res.headers.get("PAYMENT-RESPONSE");
+      if (paymentResponse) {
+        const decoded = decodePaymentResponseHeader(paymentResponse);
+        console.log(`   [Agent 2] Tx Hash: ${decoded.transaction}`);
+      }
+    } else {
+      console.log("   [Agent 2] Paying with USDT (EIP-7702)");
+      console.log("   [Agent 2] Contacting Agent 1 for Weather...");
+
+      const res = await fetchWithUsdt(WEATHER_AGENT_URL);
+      const data = await res.json();
+      console.log("   [Agent 2] Data Received:", data);
+
+      const paymentResponse = res.headers.get("PAYMENT-RESPONSE");
+      if (paymentResponse) {
+        const decoded = decodePaymentResponseHeader(paymentResponse);
+        console.log(`   [Agent 2] Tx Hash: ${decoded.transaction}`);
+      }
     }
   } catch (e) {
     console.error("   [Agent 2] Error:", e);

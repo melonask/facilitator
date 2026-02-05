@@ -19,14 +19,18 @@ const buyerStatus = $("#buyer-status");
 const sellerStatus = $("#seller-status");
 const facStatus = $("#fac-status");
 
-const buyerEth = $("#buyer-eth");
-const buyerTokens = $("#buyer-tokens");
-const sellerEth = $("#seller-eth");
-const sellerTokens = $("#seller-tokens");
+const buyerUsdt = $("#buyer-usdt");
+const buyerUsdc = $("#buyer-usdc");
+const sellerUsdt = $("#seller-usdt");
+const sellerUsdc = $("#seller-usdc");
 const facEth = $("#fac-eth");
+
+const tokenIndicator = $("#token-indicator");
 
 const buyerDetail = $("#buyer-detail");
 const facDetail = $("#fac-detail");
+const sigLabel1 = $("#sig-label-1");
+const sigLabel2 = $("#sig-label-2");
 const sig712 = $("#sig-712");
 const sig7702 = $("#sig-7702");
 const facVerify = $("#fac-verify");
@@ -39,11 +43,13 @@ const wrLoc = $("#wr-loc");
 
 const explainBody = $("#explain-body");
 const logsContainer = $("#logs-container");
-const startBtn = $("#start-btn");
+const buyUsdtBtn = $("#buy-usdt-btn");
+const buyUsdcBtn = $("#buy-usdc-btn");
 const nextBtn = $("#next-btn");
 const modeToggle = $("#mode-toggle");
 const msgBar = $("#message-bar");
 const systemStatus = $("#system-status");
+const ts3Detail = $("#ts-3-detail");
 
 const timelineSteps = [
   null,
@@ -57,14 +63,19 @@ const timelineSteps = [
 
 // ---- State ----
 let animating = false;
-let prevBuyerTokens = null;
-let prevSellerTokens = null;
+let prevBuyerUsdt = null;
+let prevBuyerUsdc = null;
+let prevSellerUsdt = null;
+let prevSellerUsdc = null;
 let prevFacEth = null;
 let stepMode = false;
 let midX = 0,
   topY = 0,
   facY = 0,
   width = 0;
+
+// Track current token type being used
+let currentToken = null; // "usdt" or "usdc"
 
 // Track pending gas deduction (to show when tx is actually submitted)
 let pendingGasDeduction = false;
@@ -210,7 +221,8 @@ function init() {
   setupSSE();
   setupMobileTooltips();
 
-  startBtn.addEventListener("click", triggerPurchase);
+  buyUsdtBtn.addEventListener("click", () => triggerPurchase("usdt"));
+  buyUsdcBtn.addEventListener("click", () => triggerPurchase("usdc"));
   nextBtn.addEventListener("click", onNextClick);
   modeToggle.addEventListener("click", () => {
     stepMode = !stepMode;
@@ -235,20 +247,28 @@ async function pollBalances() {
     ]);
 
     if (b) {
-      const t = parseFloat(b.tokens).toFixed(2);
-      if (prevBuyerTokens !== null && prevBuyerTokens !== t)
-        flashValue(buyerTokens);
-      prevBuyerTokens = t;
-      buyerEth.textContent = parseFloat(b.eth).toFixed(4);
-      buyerTokens.textContent = t;
+      const usdt = parseFloat(b.usdt).toFixed(2);
+      const usdc = parseFloat(b.usdc).toFixed(2);
+      if (prevBuyerUsdt !== null && prevBuyerUsdt !== usdt)
+        flashValue(buyerUsdt);
+      if (prevBuyerUsdc !== null && prevBuyerUsdc !== usdc)
+        flashValue(buyerUsdc);
+      prevBuyerUsdt = usdt;
+      prevBuyerUsdc = usdc;
+      buyerUsdt.textContent = usdt;
+      buyerUsdc.textContent = usdc;
     }
     if (s) {
-      const t = parseFloat(s.tokens).toFixed(2);
-      if (prevSellerTokens !== null && prevSellerTokens !== t)
-        flashValue(sellerTokens);
-      prevSellerTokens = t;
-      sellerEth.textContent = parseFloat(s.eth).toFixed(4);
-      sellerTokens.textContent = t;
+      const usdt = parseFloat(s.usdt).toFixed(2);
+      const usdc = parseFloat(s.usdc).toFixed(2);
+      if (prevSellerUsdt !== null && prevSellerUsdt !== usdt)
+        flashValue(sellerUsdt);
+      if (prevSellerUsdc !== null && prevSellerUsdc !== usdc)
+        flashValue(sellerUsdc);
+      prevSellerUsdt = usdt;
+      prevSellerUsdc = usdc;
+      sellerUsdt.textContent = usdt;
+      sellerUsdc.textContent = usdc;
     }
     if (f && f.networks && f.networks.length > 0) {
       const newEth = parseFloat(f.networks[0].eth).toFixed(4);
@@ -274,16 +294,17 @@ function flashGasDeducted(el) {
 }
 
 // ---- Trigger Purchase ----
-async function triggerPurchase() {
+async function triggerPurchase(token) {
   if (animating) return;
-  startBtn.disabled = true;
+  buyUsdtBtn.disabled = true;
+  buyUsdcBtn.disabled = true;
   if (stepMode) {
     nextBtn.classList.remove("hidden");
     nextBtn.disabled = true;
   }
-  log("sys", "Manual purchase triggered");
+  log("sys", `Manual purchase triggered (${token.toUpperCase()})`);
   try {
-    await fetch(`${BUYER_URL}/buy`);
+    await fetch(`${BUYER_URL}/buy?token=${token}`);
   } catch (_) {
     log("sys", "Connection failed");
   }
@@ -304,14 +325,44 @@ function setupSSE() {
   };
 }
 
+// ---- Detect token type from log messages ----
+function detectToken(msg) {
+  if (msg.includes("USDC") || msg.includes("ERC-3009")) {
+    currentToken = "usdc";
+    return "usdc";
+  }
+  if (msg.includes("USDT") || msg.includes("EIP-7702")) {
+    currentToken = "usdt";
+    return "usdt";
+  }
+  return currentToken;
+}
+
+function getTokenLabel() {
+  return currentToken === "usdc" ? "USDC (ERC-3009)" : "USDT (EIP-7702)";
+}
+
+function showTokenIndicator() {
+  if (!currentToken) return;
+  tokenIndicator.textContent = getTokenLabel();
+  tokenIndicator.className = "token-indicator token-" + currentToken;
+  tokenIndicator.classList.remove("hidden");
+}
+
 // ---- Visual State Machine ----
 function handleVisuals(source, msg) {
+  // Detect token type from payment messages
+  if (source === "Agent 2" && (msg.includes("Paying with") || msg.includes("Signing"))) {
+    detectToken(msg);
+  }
+
   // Step 1: Buyer contacts seller
   if (source === "Agent 2" && msg.includes("Contacting Agent 1")) {
     animating = true;
 
     enqueue(() => {
       resetAll();
+      showTokenIndicator();
       setTimeline(1);
       // Buyer glows immediately (it's the initiator)
       glow(nodeBuyer, "buyer");
@@ -325,7 +376,8 @@ function handleVisuals(source, msg) {
 
       explain(
         "<strong>Step 1: Initial Request</strong>" +
-          "<p>The Buyer agent sends a <code>GET /weather</code> request to the Seller. " +
+          `<p>The Buyer agent sends a <code>GET /weather</code> request to the Seller, ` +
+          `paying with <strong>${getTokenLabel()}</strong>. ` +
           "No payment headers are attached yet — this is a normal HTTP request.</p>" +
           '<p class="dim">The Seller will check for a PAYMENT-SIGNATURE header and reject with 402 if missing.</p>',
       );
@@ -346,10 +398,10 @@ function handleVisuals(source, msg) {
       explain(
         "<strong>Step 2: HTTP 402 Payment Required</strong>" +
           "<p>The Seller responds with status <code>402</code> and includes a " +
-          "<code>PAYMENT-REQUIRED</code> header (base64-encoded JSON) specifying:</p>" +
-          "<p>Token address, amount (1 USDT), recipient, scheme (<code>eip7702</code>), " +
-          "and network (<code>eip155:31337</code>).</p>" +
-          '<p class="dim">This is the x402 protocol — any HTTP server can become a paid API.</p>',
+          "<code>PAYMENT-REQUIRED</code> header specifying accepted payment options:</p>" +
+          "<p><strong>USDT</strong> via <code>eip7702</code> scheme, or " +
+          "<strong>USDC</strong> via <code>exact</code> (ERC-3009) scheme.</p>" +
+          '<p class="dim">This is the x402 protocol — any HTTP server can become a paid API accepting multiple tokens.</p>',
       );
     }, PACKET_DURATION + 400);
   }
@@ -363,25 +415,61 @@ function handleVisuals(source, msg) {
     }, 800);
   }
 
-  // Step 3: Buyer signs
+  // Step 3: Buyer signs (EIP-7702 path)
   if (source === "Agent 2" && msg.includes("Signing EIP-712")) {
     enqueue(() => {
       setTimeline(3);
+      ts3Detail.textContent = "EIP-712 + EIP-7702";
       status(buyerStatus, "SIGNING...");
       buyerDetail.classList.remove("hidden");
+      sigLabel1.textContent = "EIP-712";
+      sigLabel2.textContent = "EIP-7702";
       sig712.textContent = "PaymentIntent";
       sig712.className = "detail-val pending";
       sig7702.textContent = "Authorization";
       sig7702.className = "detail-val pending";
       explain(
-        "<strong>Step 3: Cryptographic Signatures</strong>" +
+        "<strong>Step 3: EIP-7702 Signatures (USDT)</strong>" +
           "<p>The Buyer creates two signatures:</p>" +
           "<p><strong>EIP-712 PaymentIntent</strong> — structured data specifying token, amount, " +
           "recipient, nonce, and deadline. This is <em>what</em> to pay.</p>" +
           "<p><strong>EIP-7702 Authorization</strong> — delegates the Buyer's EOA to the " +
           "<code>Delegate.sol</code> contract. This allows the relayer to execute a transfer " +
           "from the Buyer's address without the Buyer paying gas.</p>" +
-          '<p class="dim">Unlike EIP-3009 (USDC only), EIP-7702 works with any ERC-20 token including USDT.</p>',
+          '<p class="dim">EIP-7702 works with any ERC-20 token including USDT, DAI, WETH.</p>',
+      );
+    }, 600);
+
+    // Simulate signing completion
+    enqueue(() => {
+      sig712.textContent = "SIGNED";
+      sig712.className = "detail-val ok";
+      sig7702.textContent = "SIGNED";
+      sig7702.className = "detail-val ok";
+      status(buyerStatus, "SIGNATURES READY");
+    }, 1000);
+  }
+
+  // Step 3: Buyer signs (ERC-3009 path)
+  if (source === "Agent 2" && msg.includes("Signing ERC-3009")) {
+    enqueue(() => {
+      setTimeline(3);
+      ts3Detail.textContent = "ERC-3009";
+      status(buyerStatus, "SIGNING...");
+      buyerDetail.classList.remove("hidden");
+      sigLabel1.textContent = "EIP-712";
+      sigLabel2.textContent = "ERC-3009";
+      sig712.textContent = "TransferWithAuth";
+      sig712.className = "detail-val pending";
+      sig7702.textContent = "Authorization";
+      sig7702.className = "detail-val pending";
+      explain(
+        "<strong>Step 3: ERC-3009 Signature (USDC)</strong>" +
+          "<p>The Buyer signs a single <strong>EIP-712 TransferWithAuthorization</strong> message:</p>" +
+          "<p>This authorizes a direct transfer of USDC from the Buyer to the Seller. " +
+          "The token contract itself supports this — no account delegation needed.</p>" +
+          "<p>Fields: from, to, value, validAfter, validBefore, nonce.</p>" +
+          '<p class="dim">ERC-3009 is native to USDC — the token contract handles the authorized transfer directly.</p>',
       );
     }, 600);
 
@@ -407,7 +495,8 @@ function handleVisuals(source, msg) {
       explain(
         "<strong>Step 4: Retry with Payment</strong>" +
           "<p>The Buyer retries the same <code>GET /weather</code> request, now with a " +
-          "<code>PAYMENT-SIGNATURE</code> header containing both signatures encoded in base64.</p>" +
+          "<code>PAYMENT-SIGNATURE</code> header containing the signed authorization.</p>" +
+          `<p>Token: <strong>${getTokenLabel()}</strong></p>` +
           '<p class="dim">The Seller will parse this header and forward it to the Facilitator for settlement.</p>',
       );
     }, PACKET_DURATION + 400);
@@ -415,6 +504,8 @@ function handleVisuals(source, msg) {
 
   // Step 5a: Seller requests verification from Facilitator
   if (source === "Agent 1" && msg.includes("Requesting Verification")) {
+    const txType = currentToken === "usdc" ? "ERC-3009" : "EIP-7702 Type 4";
+
     enqueue(() => {
       setTimeline(5);
       hideMessage();
@@ -432,7 +523,7 @@ function handleVisuals(source, msg) {
         facDetail.classList.remove("hidden");
         facVerify.textContent = "Checking...";
         facVerify.className = "detail-val pending";
-        facTxtype.textContent = "EIP-7702 Type 4";
+        facTxtype.textContent = txType;
         facTxtype.className = "detail-val";
         facTxhash.textContent = "--";
         facTxhash.className = "detail-val mono";
@@ -440,15 +531,21 @@ function handleVisuals(source, msg) {
 
       log("fac", "POST /verify → Facilitator");
 
-      explain(
-        "<strong>Step 5a: Facilitator Verification</strong>" +
-          "<p>The Seller calls <code>POST /verify</code> on the Facilitator, forwarding the payment payload.</p>" +
-          "<p>The Facilitator performs 5 off-chain checks:</p>" +
+      const verifyExplain = currentToken === "usdc"
+        ? "<strong>Step 5a: Facilitator Verification (ERC-3009)</strong>" +
+          "<p>The Seller calls <code>POST /verify</code> on the Facilitator.</p>" +
+          "<p>The Facilitator verifies the EIP-712 TransferWithAuthorization signature, " +
+          "checks the USDC balance, and validates timing constraints.</p>"
+        : "<strong>Step 5a: Facilitator Verification (EIP-7702)</strong>" +
+          "<p>The Seller calls <code>POST /verify</code> on the Facilitator.</p>" +
+          "<p>The Facilitator performs off-chain checks:</p>" +
           "<p>1. Recover signer from EIP-7702 authorization<br>" +
           "2. Verify EIP-712 intent signature<br>" +
-          "3. Check deadline has not expired<br>" +
-          "4. Check nonce has not been used<br>" +
-          "5. Check payer has sufficient token balance</p>" +
+          "3. Check deadline and nonce<br>" +
+          "4. Check payer token balance</p>";
+
+      explain(
+        verifyExplain +
           '<p class="dim">Verification is read-only — no nonce is consumed and no transaction is sent yet.</p>',
       );
     }, PACKET_DURATION + 400);
@@ -482,13 +579,17 @@ function handleVisuals(source, msg) {
 
       log("fac", "POST /settle → Facilitator");
 
+      const settleExplain = currentToken === "usdc"
+        ? "<strong>Step 5b: On-Chain Settlement (ERC-3009)</strong>" +
+          "<p>The Facilitator calls <code>transferWithAuthorization</code> on the USDC contract, " +
+          "executing the signed transfer directly. The relayer pays gas.</p>"
+        : "<strong>Step 5b: On-Chain Settlement (EIP-7702)</strong>" +
+          "<p>The Facilitator submits a <strong>Type 4 transaction</strong> (EIP-7702) through the relayer. " +
+          "The Buyer's EOA delegates to <code>Delegate.sol</code> which calls <code>safeTransfer</code> " +
+          "to move USDT from Buyer to Seller.</p>";
+
       explain(
-        "<strong>Step 5b: On-Chain Settlement</strong>" +
-          "<p>Verification passed. The Seller now calls <code>POST /settle</code> on the Facilitator.</p>" +
-          "<p>The Facilitator re-verifies (consuming the nonce this time), then submits a " +
-          "<strong>Type 4 transaction</strong> (EIP-7702) through the relayer.</p>" +
-          "<p>The relayer pays gas. The Buyer's EOA delegates to <code>Delegate.sol</code> " +
-          "which calls <code>SafeERC20.safeTransfer</code> to move tokens from Buyer to Seller.</p>" +
+        settleExplain +
           '<p class="dim">This is the core of the Facilitator — it bridges HTTP payments to on-chain settlement.</p>',
       );
     }, PACKET_DURATION + 400);
@@ -498,6 +599,13 @@ function handleVisuals(source, msg) {
   if (source === "Agent 1" && msg.includes("Settlement Confirmed")) {
     const txMatch = msg.match(/Tx:\s*(0x[a-fA-F0-9]+)/);
     const txHash = txMatch ? txMatch[1] : "0x...";
+
+    // Detect token from settlement message
+    if (msg.includes("USDC") || msg.includes("ERC-3009")) {
+      currentToken = "usdc";
+    } else if (msg.includes("USDT") || msg.includes("EIP-7702")) {
+      currentToken = "usdt";
+    }
 
     enqueue(() => {
       animatePacket("fac-seller");
@@ -532,9 +640,10 @@ function handleVisuals(source, msg) {
 
       explain(
         "<strong>Step 6: Data Delivery</strong>" +
-          "<p>The on-chain transfer is confirmed. The Seller now delivers the weather data " +
-          "with a <code>200 OK</code> response and includes a <code>PAYMENT-RESPONSE</code> header " +
-          "containing the transaction hash as a receipt.</p>" +
+          "<p>The on-chain transfer is confirmed. The Seller delivers the weather data " +
+          "with a <code>200 OK</code> response and a <code>PAYMENT-RESPONSE</code> header " +
+          "containing the transaction hash.</p>" +
+          `<p>Token used: <strong>${getTokenLabel()}</strong></p>` +
           '<p class="dim">The Buyer received paid API data without ever paying gas or holding native tokens.</p>',
       );
     }, PACKET_DURATION + 400);
@@ -542,6 +651,8 @@ function handleVisuals(source, msg) {
 
   // Completion: Buyer receives data
   if (source === "Agent 2" && msg.includes("Data Received")) {
+    const tokenLabel = getTokenLabel();
+
     enqueue(() => {
       hideMessage();
       glow(nodeBuyer, "buyer");
@@ -555,21 +666,22 @@ function handleVisuals(source, msg) {
 
       explain(
         "<strong>Transaction Complete</strong>" +
-          "<p>The Buyer received the paid weather data. On-chain, 1 USDT was transferred " +
-          "from the Buyer to the Seller via EIP-7702 delegation.</p>" +
+          `<p>The Buyer received paid weather data. On-chain, 1 token was transferred ` +
+          `from Buyer to Seller via <strong>${tokenLabel}</strong>.</p>` +
           "<p>The Facilitator's relayer paid the gas. The Buyer never needed native ETH.</p>" +
-          '<p class="highlight">This works with any ERC-20 token — USDT, DAI, WETH — not just USDC.</p>',
+          '<p class="highlight">This Facilitator supports multiple mechanisms — ' +
+          "EIP-7702 for any ERC-20 (USDT), and ERC-3009 for USDC.</p>",
       );
 
-      log("success", "Transaction complete. Tokens transferred on-chain.");
+      log("success", `Transaction complete. ${tokenLabel} transferred on-chain.`);
     }, 15000);
 
     // Reset after showing result
     enqueue(() => {
       resetAll();
-      // Enable start button for retry
-      startBtn.disabled = false;
-      startBtn.textContent = "RETRY";
+      // Enable buy buttons for retry
+      buyUsdtBtn.disabled = false;
+      buyUsdcBtn.disabled = false;
       animating = false;
     }, 5000);
   }
@@ -651,18 +763,21 @@ function resetAll() {
   buyerDetail.classList.add("hidden");
   facDetail.classList.add("hidden");
   weatherResult.classList.add("hidden");
+  tokenIndicator.classList.add("hidden");
   facCore.classList.remove("pulse");
   hideMessage();
 
-  // Reset pending gas flag
+  // Reset state
+  currentToken = null;
   pendingGasDeduction = false;
+  ts3Detail.textContent = "EIP-712 + EIP-7702";
 
   // Explanation
   explain(
-    "<p>Click <strong>INITIATE</strong> or wait for the auto-purchase. " +
+    '<p>Click <strong>USDT</strong> or <strong>USDC</strong> to initiate a purchase. ' +
       "The visualization shows each step of the x402 protocol in real time.</p>" +
-      '<p class="dim">The Facilitator verifies EIP-712 signatures off-chain, then submits ' +
-      "an EIP-7702 Type 4 transaction so the Buyer never pays gas.</p>",
+      '<p class="dim">USDT uses EIP-7702 delegation. USDC uses ERC-3009 transferWithAuthorization. ' +
+      "Both are settled by the same Facilitator — the Buyer never pays gas.</p>",
   );
 }
 

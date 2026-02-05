@@ -1,6 +1,6 @@
 {
   "name": "facilitator",
-  "version": "0.3.10",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "Self-hosted x402 payment facilitator server — verifies and settles any ERC-20 token (USDT, DAI, etc.)",
@@ -15,17 +15,20 @@
   "license": "MIT",
   "author": "melonask",
   "workspaces": [
+    "packages/contracts",
     "packages/demo",
     "packages/dash",
-    "packages/eip7702"
+    "packages/eip7702",
+    "packages/server"
   ],
   "scripts": {
     "build": "npm run build --workspaces",
-    "test": "node --import tsx --test packages/eip7702/test/*.test.ts",
+    "test": "node --import tsx --test packages/*/test/*.test.ts",
     "test:contracts": "cd packages/contracts && forge test -vv",
     "build:contracts": "cd packages/contracts && forge build",
     "typecheck": "npm run typecheck --workspaces",
-    "demo": "node packages/demo/dist/demo.js"
+    "demo": "node packages/demo/dist/bin/demo.js",
+    "dash": "node packages/dash/bin/dash.js"
   },
   "devDependencies": {
     "@types/node": "^25.2.0",

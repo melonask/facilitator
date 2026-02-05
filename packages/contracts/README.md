@@ -192,8 +192,11 @@ forge coverage
 
 Deterministic deployment via CREATE2 (same address on every chain):
 
+**Salt:** `0xcabb92b3cbd6ab7eeb40c1a3415b7c452a7e3e900d53a9eb466f56e44018d5c7`
+
 ```bash
 export DEPLOYER_PRIVATE_KEY=0x...
+# The script defaults to the correct salt if not provided
 forge script script/Deploy.s.sol --rpc-url <RPC_URL> --broadcast
 ```
 

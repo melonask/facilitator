@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   publish:
-    name: Publish to npm/crates
+    name: Publish to npm
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -79,3 +79,16 @@ jobs:
         if: ${{ inputs.dry-run == true }}
         run: npm publish --access public --dry-run
         working-directory: packages/dash
+
+      # --- Server ---
+      - name: Publish server
+        if: ${{ inputs.dry-run != true }}
+        run: npm publish --access public
+        working-directory: packages/server
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish server (dry run)
+        if: ${{ inputs.dry-run == true }}
+        run: npm publish --access public --dry-run
+        working-directory: packages/server

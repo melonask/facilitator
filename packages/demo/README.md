@@ -24,7 +24,7 @@ npx @facilitator/demo
 This starts Anvil, deploys contracts, funds accounts, starts agents and web UI, then prints a command to run the facilitator:
 
 ```bash
-npx @facilitator/eip7702 --relayer-key 0x... --delegate-address 0x... --rpc-url http://127.0.0.1:8545
+npx @facilitator/server --relayer-key 0x... --delegate-address 0x... --rpc-url http://127.0.0.1:8545
 ```
 
 Run that in a **new terminal**, then open `http://localhost:3030` and click **INITIATE**.

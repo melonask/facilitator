@@ -2,7 +2,7 @@
 
 <img src="https://raw.githubusercontent.com/melonask/facilitator/refs/heads/main/packages/dash/public/scr.png" alt="x402 EIP-7702 Facilitator Dashboard">
 
-Self-hosted EIP-7702 payment facilitator for the [x402](https://github.com/coinbase/x402) protocol. Enables gasless ERC-20 (USDT, DAI, etc.) and native ETH transfers on any EVM chain.
+Self-hosted payment facilitator for the [x402](https://github.com/coinbase/x402) protocol. Supports **EIP-7702** (any ERC-20, native ETH) and **ERC-3009** (USDC) payment mechanisms. Enables gasless transfers on any EVM chain.
 
 ## How It Works
 
@@ -29,12 +29,13 @@ The facilitator acts as a trusted relayer between a buyer and seller. The buyer 
 
 ## Packages
 
-| Package                                    | Description                                                             |
-| ------------------------------------------ | ----------------------------------------------------------------------- |
-| [`packages/contracts`](packages/contracts) | Solidity `Delegate.sol` — EIP-7702 delegate for gasless payment intents |
-| [`packages/eip7702`](packages/eip7702)     | TypeScript facilitator server — verify + settle via `viem`              |
+| Package                                    | Description                                                              |
+| ------------------------------------------ | ------------------------------------------------------------------------ |
+| [`packages/contracts`](packages/contracts) | Solidity `Delegate.sol` — EIP-7702 delegate for gasless payment intents  |
+| [`packages/eip7702`](packages/eip7702)     | EIP-7702 mechanism library — verify + settle any ERC-20 via `viem`       |
+| [`packages/server`](packages/server)       | Unified CLI server — supports EIP-7702 + ERC-3009 mechanisms             |
 | [`packages/dash`](packages/dash)           | Real-time dashboard for monitoring facilitator balances and transactions |
-| [`packages/demo`](packages/demo)           | Interactive demo with buyer/seller agents and real-time web UI          |
+| [`packages/demo`](packages/demo)           | Interactive demo with dual-token (USDT + USDC) buyer/seller agents       |
 
 ## Quick Start
 
@@ -60,7 +61,10 @@ npx @facilitator/demo
 Then in a new terminal, run the facilitator command printed by the demo:
 
 ```bash
-npx @facilitator/eip7702 --relayer-key 0x... --delegate-address 0x... --rpc-url http://127.0.0.1:8545
+npx @facilitator/server \
+    --relayer-key 0x... \
+    --delegate-address 0x... \
+    --rpc-url http://127.0.0.1:8545
 ```
 
 Open `http://localhost:3030` and click **INITIATE**.
@@ -77,18 +81,32 @@ npx @facilitator/dash
 
 ```bash
 forge install melonask/facilitator
-forge script lib/facilitator/packages/contracts/script/Deploy.s.sol --rpc-url <RPC_URL> --broadcast
+forge \
+    script lib/facilitator/packages/contracts/script/Deploy.s.sol \
+    --rpc-url <RPC_URL> \
+    --broadcast
 ```
 
 2. **Run the facilitator**:
 
+**Multi-Chain:**
+
 ```bash
-npx @facilitator/eip7702 \
+npx @facilitator/server \
+  --relayer-key 0x... \
+  --chain 1=https://,https:// \
+  --chain 137=https://polygon-rpc.com
+```
+
+**Single-Chain:**
+
+```bash
+npx @facilitator/server \
   --relayer-key 0x... \
   --rpc-url https://...
 ```
 
-On supported networks (Ethereum, Polygon, Base, Optimism, Arbitrum, BNB Chain, Avalanche), the delegate address is resolved automatically. For custom deployments, pass `--delegate-address 0x...` explicitly.
+The server automatically resolves the `Delegate.sol` address for known networks (Ethereum, Polygon, Base, Optimism, Arbitrum, BNB Chain, Avalanche). For custom deployments, pass `--delegate-address 0x...` explicitly.
 
 ## API
 
@@ -147,9 +165,11 @@ The facilitator performs these checks before settlement:
 6. Check nonce has not been used (replay protection)
 7. Check payer has sufficient token/ETH balance on-chain
 
-## Compared to ERC-3009 (x402 default)
+## Supported Mechanisms
 
-|                   | ERC-3009 (x402 default)                             | EIP-7702 (this project)        |
+This facilitator supports **both** mechanisms simultaneously:
+
+|                   | ERC-3009 (`exact` scheme)                           | EIP-7702 (`eip7702` scheme)    |
 | ----------------- | --------------------------------------------------- | ------------------------------ |
 | **Token support** | Only tokens with `transferWithAuthorization` (USDC) | Any ERC-20 (USDT) + native ETH |
 | **Mechanism**     | Token-level authorization                           | Account-level delegation       |

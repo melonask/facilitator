@@ -7,12 +7,12 @@ import { fileURLToPath } from "node:url";
 import { createPublicClient, createWalletClient, http, parseEther, } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
-import { serve } from "./serve.js";
+import { serve } from "../serve.js";
 const require = createRequire(import.meta.url);
 // Import Artifacts
-const delegateArtifact = require("../public/abi/Delegate.sol/Delegate.json");
-const tokenArtifact = require("../public/abi/ERC20Mock.sol/ERC20Mock.json");
-const eip3009Artifact = require("../public/abi/EIP3009Mock.sol/EIP3009Mock.json");
+const delegateArtifact = require("../../public/abi/Delegate.sol/Delegate.json");
+const tokenArtifact = require("../../public/abi/ERC20Mock.sol/ERC20Mock.json");
+const eip3009Artifact = require("../../public/abi/EIP3009Mock.sol/EIP3009Mock.json");
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ANVIL_PORT = 8545;
 const FACILITATOR_PORT = 8080;
@@ -174,7 +174,7 @@ async function main() {
     // 3. Start Agents
     step(3, "Starting Agents");
     // Buyer (Agent 2)
-    const buyerAgent = spawn(process.execPath, [path.resolve(__dirname, "buyer-server.js")], {
+    const buyerAgent = spawn(process.execPath, [path.resolve(__dirname, "../buyer-server.js")], {
         env: {
             ...process.env,
             PORT: String(BUYER_PORT),
@@ -190,7 +190,7 @@ async function main() {
         stdio: "pipe",
     });
     // Seller (Agent 1)
-    const sellerAgent = spawn(process.execPath, [path.resolve(__dirname, "weather-server.js")], {
+    const sellerAgent = spawn(process.execPath, [path.resolve(__dirname, "../weather-server.js")], {
         env: {
             ...process.env,
             PORT: String(SELLER_PORT),
@@ -223,7 +223,7 @@ async function main() {
     // 4. Start UI
     step(4, "Starting UI");
     function startWebServer() {
-        const publicDir = path.resolve(__dirname, "../public");
+        const publicDir = path.resolve(__dirname, "../../public");
         serve(WEB_PORT, async (req) => {
             const url = new URL(req.url);
             if (url.pathname === "/logs") {
@@ -263,10 +263,41 @@ ${DIM}────────────────────────�
     startWebServer();
     // 5. Instructions
     step(5, "Start Facilitator");
+    function detectServerCommand() {
+        const isBun = typeof process.versions.bun !== "undefined";
+        const userAgent = process.env.npm_config_user_agent || "";
+        const currentScript = process.argv[1] || "";
+        // Check if running locally within the monorepo structure
+        if (currentScript.includes("packages/demo")) {
+            // Try to construct the server path by swapping "demo" with "server"
+            // Works for: .../packages/demo/dist/bin/demo.js -> .../packages/server/dist/bin/server.js
+            // Works for: .../packages/demo/src/bin/demo.ts  -> .../packages/server/src/bin/server.ts
+            let serverScript = currentScript
+                .replace("packages/demo", "packages/server")
+                .replace(/demo\.(js|ts)$/, "server.$1");
+            if (fs.existsSync(serverScript)) {
+                const relativePath = path.relative(process.cwd(), serverScript);
+                const runtime = isBun ? "bun" : "node";
+                return `${runtime} ${relativePath}`;
+            }
+        }
+        // Fallback to package manager runners
+        if (userAgent.startsWith("bun") || isBun) {
+            return "bunx @facilitator/server";
+        }
+        if (userAgent.startsWith("yarn")) {
+            return "yarn dlx @facilitator/server";
+        }
+        if (userAgent.startsWith("pnpm")) {
+            return "pnpm dlx @facilitator/server";
+        }
+        return "npx @facilitator/server";
+    }
+    const serverCommand = detectServerCommand();
     console.log(`
 ${YELLOW}Run in a new terminal:${RESET}
 
-  ${CYAN}npx @facilitator/server \\
+  ${CYAN}${serverCommand} \\
     --relayer-key ${RELAYER_KEY} \\
     --delegate-address ${delegateAddress} \\
     --rpc-url http://127.0.0.1:${ANVIL_PORT}${RESET}

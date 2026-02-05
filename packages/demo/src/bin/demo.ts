@@ -13,13 +13,14 @@ import {
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
-import { serve } from "./serve.js";
+import { serve } from "../serve.js";
 
 const require = createRequire(import.meta.url);
 
 // Import Artifacts
-const delegateArtifact = require("../public/abi/Delegate.sol/Delegate.json");
-const tokenArtifact = require("../public/abi/ERC20Mock.sol/ERC20Mock.json");
+const delegateArtifact = require("../../public/abi/Delegate.sol/Delegate.json");
+const tokenArtifact = require("../../public/abi/ERC20Mock.sol/ERC20Mock.json");
+const eip3009Artifact = require("../../public/abi/EIP3009Mock.sol/EIP3009Mock.json");
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -50,7 +51,7 @@ const MAGENTA = "\x1b[35m";
 function banner() {
   console.log(`
 ${DIM}──────────────────────────────────────────────${RESET}
-  ${BOLD}x402${RESET} ${DIM}//${RESET} EIP-7702 Agent Economy Demo
+  ${BOLD}x402${RESET} ${DIM}//${RESET} Multi-Mechanism Agent Economy Demo
 ${DIM}──────────────────────────────────────────────${RESET}`);
 }
 
@@ -159,11 +160,37 @@ async function main() {
     await publicClient.waitForTransactionReceipt({ hash: deployUsdtHash })
   ).contractAddress!;
 
-  // Mint to Buyer (1000 USDT)
+  // Deploy USDC (EIP-3009 Mock)
+  const deployUsdcHash = await walletClient.deployContract({
+    account: deployer,
+    abi: eip3009Artifact.abi,
+    bytecode: eip3009Artifact.bytecode.object as Hex,
+  });
+  const usdcAddress = (
+    await publicClient.waitForTransactionReceipt({ hash: deployUsdcHash })
+  ).contractAddress!;
+
+  // Read USDC EIP-712 domain (name, version)
+  const usdcDomain = (await publicClient.readContract({
+    address: usdcAddress,
+    abi: eip3009Artifact.abi,
+    functionName: "eip712Domain",
+  })) as [Hex, string, string, bigint, string, Hex, bigint[]];
+  const usdcName = usdcDomain[1];
+  const usdcVersion = usdcDomain[2];
+
+  // Mint to Buyer (1000 USDT + 1000 USDC)
   await walletClient.writeContract({
     account: deployer,
     address: usdtAddress,
     abi: tokenArtifact.abi,
+    functionName: "mint",
+    args: [buyer.address, parseEther("1000")],
+  });
+  await walletClient.writeContract({
+    account: deployer,
+    address: usdcAddress,
+    abi: eip3009Artifact.abi,
     functionName: "mint",
     args: [buyer.address, parseEther("1000")],
   });
@@ -176,8 +203,12 @@ async function main() {
   });
 
   detail("delegate", `${CYAN}${delegateAddress}${RESET}`);
-  detail("token", `${CYAN}${usdtAddress}${RESET}`);
-  detail("buyer", `${buyer.address.slice(0, 6)}.. ${CYAN}1000 USDT${RESET}`);
+  detail("usdt", `${CYAN}${usdtAddress}${RESET}`);
+  detail("usdc", `${CYAN}${usdcAddress}${RESET} (${usdcName} v${usdcVersion})`);
+  detail(
+    "buyer",
+    `${buyer.address.slice(0, 6)}.. ${CYAN}1000 USDT + 1000 USDC${RESET}`,
+  );
   detail("relayer", `${relayer.address.slice(0, 6)}.. ${CYAN}1 ETH${RESET}`);
 
   topology(delegateAddress, usdtAddress);
@@ -188,7 +219,7 @@ async function main() {
   // Buyer (Agent 2)
   const buyerAgent = spawn(
     process.execPath,
-    [path.resolve(__dirname, "buyer-server.js")],
+    [path.resolve(__dirname, "../buyer-server.js")],
     {
       env: {
         ...process.env,
@@ -197,6 +228,9 @@ async function main() {
         BUYER_KEY: BUYER_KEY,
         DELEGATE_ADDRESS: delegateAddress,
         TOKEN_ADDRESS: usdtAddress,
+        USDC_ADDRESS: usdcAddress,
+        USDC_NAME: usdcName,
+        USDC_VERSION: usdcVersion,
         ANVIL_RPC: `http://127.0.0.1:${ANVIL_PORT}`,
       },
       stdio: "pipe",
@@ -206,7 +240,7 @@ async function main() {
   // Seller (Agent 1)
   const sellerAgent = spawn(
     process.execPath,
-    [path.resolve(__dirname, "weather-server.js")],
+    [path.resolve(__dirname, "../weather-server.js")],
     {
       env: {
         ...process.env,
@@ -214,6 +248,9 @@ async function main() {
         FACILITATOR_URL: `http://localhost:${FACILITATOR_PORT}`,
         SELLER_KEY: SELLER_KEY,
         TOKEN_ADDRESS: usdtAddress,
+        USDC_ADDRESS: usdcAddress,
+        USDC_NAME: usdcName,
+        USDC_VERSION: usdcVersion,
         ANVIL_RPC: `http://127.0.0.1:${ANVIL_PORT}`,
       },
       stdio: "pipe",
@@ -242,7 +279,7 @@ async function main() {
   step(4, "Starting UI");
 
   function startWebServer() {
-    const publicDir = path.resolve(__dirname, "../public");
+    const publicDir = path.resolve(__dirname, "../../public");
 
     serve(WEB_PORT, async (req) => {
       const url = new URL(req.url);
@@ -294,10 +331,48 @@ ${DIM}────────────────────────�
 
   // 5. Instructions
   step(5, "Start Facilitator");
+
+  function detectServerCommand() {
+    const isBun = typeof process.versions.bun !== "undefined";
+    const userAgent = process.env.npm_config_user_agent || "";
+    const currentScript = process.argv[1] || "";
+
+    // Check if running locally within the monorepo structure
+    if (currentScript.includes("packages/demo")) {
+      // Try to construct the server path by swapping "demo" with "server"
+      // Works for: .../packages/demo/dist/bin/demo.js -> .../packages/server/dist/bin/server.js
+      // Works for: .../packages/demo/src/bin/demo.ts  -> .../packages/server/src/bin/server.ts
+      let serverScript = currentScript
+        .replace("packages/demo", "packages/server")
+        .replace(/demo\.(js|ts)$/, "server.$1");
+
+      if (fs.existsSync(serverScript)) {
+        const relativePath = path.relative(process.cwd(), serverScript);
+        const runtime = isBun ? "bun" : "node";
+        return `${runtime} ${relativePath}`;
+      }
+    }
+
+    // Fallback to package manager runners
+    if (userAgent.startsWith("bun") || isBun) {
+      return "bunx @facilitator/server";
+    }
+    if (userAgent.startsWith("yarn")) {
+      return "yarn dlx @facilitator/server";
+    }
+    if (userAgent.startsWith("pnpm")) {
+      return "pnpm dlx @facilitator/server";
+    }
+
+    return "npx @facilitator/server";
+  }
+
+  const serverCommand = detectServerCommand();
+
   console.log(`
 ${YELLOW}Run in a new terminal:${RESET}
 
-  ${CYAN}npx @facilitator/eip7702 \\
+  ${CYAN}${serverCommand} \\
     --relayer-key ${RELAYER_KEY} \\
     --delegate-address ${delegateAddress} \\
     --rpc-url http://127.0.0.1:${ANVIL_PORT}${RESET}

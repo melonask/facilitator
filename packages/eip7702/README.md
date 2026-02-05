@@ -14,17 +14,13 @@ npm install @facilitator/eip7702
 
 ## Usage
 
-### As a Standalone Server
-
-```bash
-npx @facilitator/eip7702 \
-  --relayer-key 0x... \
-  --rpc-url https://mainnet.infura.io/v3/...
-```
-
-> **Note:** You can also use `bunx`, `yarn dlx`, or `pnpm dlx` if you prefer.
-
-The chain ID is auto-detected from the RPC endpoint. On supported networks, the delegate address is resolved automatically.
+> **Standalone Server:** Use [`@facilitator/server`](../server) for a CLI server that supports both EIP-7702 and ERC-3009 mechanisms:
+>
+> ```bash
+> npx @facilitator/server
+>     --relayer-key 0x...
+>     --rpc-url https://...
+> ```
 
 ### As a Library
 
@@ -60,32 +56,14 @@ const mechanism = new Eip7702Mechanism({
 });
 
 const facilitator = new x402Facilitator();
-facilitator.register(["eip155:1"], mechanism);
+facilitator.register(["eip155:1", "eip155:137"], mechanism);
 
 // Use facilitator.verify() and facilitator.settle()
 ```
 
-### CLI Options
+### Supported Networks
 
-| Option               | Default     | Description                     |
-| -------------------- | ----------- | ------------------------------- |
-| `--port`             | `8080`      | Server port                     |
-| `--host`             | `0.0.0.0`   | Server host                     |
-| `--relayer-key`      | required    | Private key (hex) — pays gas    |
-| `--delegate-address` | auto-detect | Deployed `Delegate.sol` address |
-| `--rpc-url`          | required    | EVM JSON-RPC endpoint           |
-
-`--delegate-address` is auto-detected on Ethereum, Polygon, Base, Optimism, Arbitrum, BNB Chain, and Avalanche. Required for other networks.
-
-### API Endpoints
-
-| Endpoint       | Method | Description                                       |
-| -------------- | ------ | ------------------------------------------------- |
-| `/verify`      | `POST` | Verify payment signatures and balance (read-only) |
-| `/settle`      | `POST` | Verify + submit EIP-7702 Type 4 transaction       |
-| `/supported`   | `GET`  | Supported schemes, networks, signers              |
-| `/healthcheck` | `GET`  | `{ status: "ok" }`                                |
-| `/info`        | `GET`  | Relayer ETH balance                               |
+`KNOWN_DELEGATE_ADDRESSES` includes Ethereum, Polygon, Base, Optimism, Arbitrum, BNB Chain, and Avalanche. For other networks, pass the delegate address explicitly when constructing `Eip7702Mechanism`.
 
 ## Verification Flow
 

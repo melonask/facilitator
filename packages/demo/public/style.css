@@ -834,6 +834,47 @@ main {
   background: var(--facilitator-dim);
 }
 
+/* Token-specific buy buttons */
+.btn-usdt {
+  border-color: #26a17b;
+  color: #26a17b;
+}
+.btn-usdt:hover {
+  background: rgba(38, 161, 123, 0.15);
+  color: #3dd9a4;
+  border-color: #3dd9a4;
+}
+.btn-usdc {
+  border-color: #2775ca;
+  color: #2775ca;
+}
+.btn-usdc:hover {
+  background: rgba(39, 117, 202, 0.15);
+  color: #5b9de0;
+  border-color: #5b9de0;
+}
+
+/* Token indicator badge */
+.token-indicator {
+  font-family: var(--font);
+  font-size: 0.55rem;
+  padding: 2px 8px;
+  letter-spacing: 0.5px;
+  border-radius: 2px;
+  text-align: center;
+  margin-top: 4px;
+}
+.token-indicator.token-usdt {
+  background: rgba(38, 161, 123, 0.15);
+  color: #26a17b;
+  border: 1px solid rgba(38, 161, 123, 0.3);
+}
+.token-indicator.token-usdc {
+  background: rgba(39, 117, 202, 0.15);
+  color: #2775ca;
+  border: 1px solid rgba(39, 117, 202, 0.3);
+}
+
 .console-output {
   flex: 1;
   padding: 8px 12px;

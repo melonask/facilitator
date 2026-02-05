@@ -1,6 +1,6 @@
 {
   "name": "@facilitator/contracts",
-  "version": "0.0.0",
+  "version": "0.4.0",
   "private": true,
   "description": "EIP-7702 Delegate contract for x402 gasless payment intents",
   "repository": {
@@ -19,5 +19,11 @@
     "delegate",
     "payment-intents",
     "erc20"
-  ]
+  ],
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test",
+    "typecheck": "forge fmt --check",
+    "format": "forge fmt"
+  }
 }

@@ -10,9 +10,9 @@
     <div class="container">
       <header>
         <div class="header-left">
-          <h1>x402 <span class="dim">//</span> EIP-7702 FACILITATOR</h1>
+          <h1>x402 <span class="dim">//</span> MULTI-MECHANISM FACILITATOR</h1>
           <span class="header-sub"
-            >Self-hosted payment settlement for any ERC-20</span
+            >EIP-7702 (USDT) + ERC-3009 (USDC) payment settlement</span
           >
         </div>
         <div class="header-right">
@@ -46,11 +46,11 @@
           <div
             class="timeline-step"
             id="ts-3"
-            data-tooltip="Buyer signs EIP-712 PaymentIntent (what to pay) and EIP-7702 Authorization (delegate EOA to Delegate.sol)"
+            data-tooltip="Buyer signs payment authorization — EIP-712 + EIP-7702 for USDT, or ERC-3009 TransferWithAuthorization for USDC"
           >
             <div class="ts-num">3</div>
             <div class="ts-label">SIGN</div>
-            <div class="ts-detail">EIP-712 + EIP-7702</div>
+            <div class="ts-detail" id="ts-3-detail">EIP-712 + EIP-7702</div>
           </div>
           <div class="timeline-connector"></div>
           <div
@@ -97,26 +97,29 @@
 
             <div class="node-stats">
               <div class="stat">
-                <div class="stat-label">ETH</div>
-                <div class="stat-value" id="buyer-eth">--.--</div>
+                <div class="stat-label">USDT</div>
+                <div class="stat-value" id="buyer-usdt">--.--</div>
               </div>
               <div class="stat">
-                <div class="stat-label">USDT</div>
-                <div class="stat-value" id="buyer-tokens">--.--</div>
+                <div class="stat-label">USDC</div>
+                <div class="stat-value" id="buyer-usdc">--.--</div>
               </div>
             </div>
 
             <div class="node-status" id="buyer-status">IDLE</div>
 
+            <!-- Token Indicator -->
+            <div class="token-indicator hidden" id="token-indicator"></div>
+
             <!-- Signature Detail Panel -->
             <div class="detail-panel hidden" id="buyer-detail">
               <div class="detail-title">SIGNATURES</div>
               <div class="detail-row">
-                <span class="detail-key">EIP-712</span>
+                <span class="detail-key" id="sig-label-1">EIP-712</span>
                 <span class="detail-val" id="sig-712">--</span>
               </div>
               <div class="detail-row">
-                <span class="detail-key">EIP-7702</span>
+                <span class="detail-key" id="sig-label-2">EIP-7702</span>
                 <span class="detail-val" id="sig-7702">--</span>
               </div>
             </div>
@@ -166,7 +169,7 @@
                 </div>
                 <div class="node-title">FACILITATOR</div>
               </div>
-              <div class="node-role">EIP-7702 Relayer</div>
+              <div class="node-role">Multi-Mechanism Relayer</div>
 
               <div class="node-stats">
                 <div class="stat wide">
@@ -207,12 +210,12 @@
 
             <div class="node-stats">
               <div class="stat">
-                <div class="stat-label">ETH</div>
-                <div class="stat-value" id="seller-eth">--.--</div>
+                <div class="stat-label">USDT</div>
+                <div class="stat-value" id="seller-usdt">--.--</div>
               </div>
               <div class="stat">
-                <div class="stat-label">USDT</div>
-                <div class="stat-value" id="seller-tokens">--.--</div>
+                <div class="stat-label">USDC</div>
+                <div class="stat-value" id="seller-usdc">--.--</div>
               </div>
             </div>
 
@@ -221,7 +224,7 @@
             <!-- Price Tag -->
             <div class="price-tag">
               <div class="price-label">PRICE</div>
-              <div class="price-value">1 USDT / request</div>
+              <div class="price-value">1 USDT or 1 USDC / request</div>
             </div>
           </div>
         </div>
@@ -233,14 +236,13 @@
             <div class="explain-header">PROTOCOL EXPLANATION</div>
             <div class="explain-body" id="explain-body">
               <p>
-                Click <strong>INITIATE</strong> or wait for the auto-purchase.
+                Click <strong>USDT</strong> or <strong>USDC</strong> to initiate a purchase.
                 The visualization shows each step of the x402 protocol in real
                 time.
               </p>
               <p class="dim">
-                The Facilitator verifies EIP-712 signatures off-chain, then
-                submits an EIP-7702 Type 4 transaction so the Buyer never pays
-                gas.
+                USDT uses EIP-7702 delegation. USDC uses ERC-3009 transferWithAuthorization.
+                Both are settled by the same Facilitator — the Buyer never pays gas.
               </p>
             </div>
           </div>
@@ -251,7 +253,8 @@
               <span>SYSTEM LOG</span>
               <div class="console-controls">
                 <button class="btn-mode" id="mode-toggle">AUTO</button>
-                <button class="btn-initiate" id="start-btn">INITIATE</button>
+                <button class="btn-initiate btn-usdt" id="buy-usdt-btn">USDT</button>
+                <button class="btn-initiate btn-usdc" id="buy-usdc-btn">USDC</button>
                 <button class="btn-initiate btn-next hidden" id="next-btn">
                   NEXT →
                 </button>

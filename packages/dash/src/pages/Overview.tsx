@@ -545,7 +545,7 @@ export function Overview() {
                       minTickGap={40}
                     />
                     <YAxis yAxisId="left" stroke="var(--muted-foreground)" fontSize={11} allowDecimals={false} />
-                    <YAxis yAxisId="right" orientation="right" stroke="#f97316" fontSize={11} tickFormatter={(v) => v.toFixed(3)} />
+                    <YAxis yAxisId="right" orientation="right" stroke="#06b6d4" fontSize={11} tickFormatter={(v) => v.toFixed(3)} />
                     <Tooltip
                       labelFormatter={(ts) => new Date(ts).toLocaleString([], { hour12: false })}
                       formatter={(value: number, name: string) => {
@@ -556,7 +556,15 @@ export function Overview() {
                       {...tooltipStyles}
                     />
                     <Bar yAxisId="left" dataKey="count" fill="url(#colorTxActivity)" radius={0} />
-                    <Line yAxisId="right" type="monotone" dataKey="gasSpent" stroke="#f97316" strokeWidth={2} dot={false} />
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="gasSpent"
+                      stroke="#06b6d4"
+                      strokeWidth={2}
+                      dot={{ stroke: '#06b6d4', strokeWidth: 2, r: 4, fill: 'var(--card)' }}
+                      activeDot={{ r: 6, strokeWidth: 0 }}
+                    />
                   </ComposedChart>
                 </ResponsiveContainer>
               ) : (
