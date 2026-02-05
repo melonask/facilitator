@@ -319,11 +319,7 @@ contract DelegateTest is Test {
 
     function test_Transfer_EmitsPaymentExecuted() public {
         Delegate.PaymentIntent memory intent = Delegate.PaymentIntent({
-            token: address(token),
-            amount: 100 ether,
-            to: address(0xB0B),
-            nonce: 1,
-            deadline: block.timestamp + 1 hours
+            token: address(token), amount: 100 ether, to: address(0xB0B), nonce: 1, deadline: block.timestamp + 1 hours
         });
         bytes memory signature = _signErc20Intent(intent, userPrivateKey);
 
@@ -335,10 +331,7 @@ contract DelegateTest is Test {
 
     function test_TransferEth_EmitsEthPaymentExecuted() public {
         Delegate.EthPaymentIntent memory intent = Delegate.EthPaymentIntent({
-            amount: 1 ether,
-            to: address(0xB0B),
-            nonce: 2,
-            deadline: block.timestamp + 1 hours
+            amount: 1 ether, to: address(0xB0B), nonce: 2, deadline: block.timestamp + 1 hours
         });
         bytes memory signature = _signEthIntent(intent, userPrivateKey);
 
@@ -363,10 +356,7 @@ contract DelegateTest is Test {
 
     function test_TransferEth_Revert_InvalidSignature() public {
         Delegate.EthPaymentIntent memory intent = Delegate.EthPaymentIntent({
-            amount: 1 ether,
-            to: address(0xB0B),
-            nonce: 2,
-            deadline: block.timestamp + 1 hours
+            amount: 1 ether, to: address(0xB0B), nonce: 2, deadline: block.timestamp + 1 hours
         });
         // Signed by attacker, not user
         bytes memory signature = _signEthIntent(intent, attackerPrivateKey);
@@ -377,10 +367,7 @@ contract DelegateTest is Test {
 
     function test_TransferEth_Revert_NonceUsed() public {
         Delegate.EthPaymentIntent memory intent = Delegate.EthPaymentIntent({
-            amount: 1 ether,
-            to: address(0xB0B),
-            nonce: 2,
-            deadline: block.timestamp + 1 hours
+            amount: 1 ether, to: address(0xB0B), nonce: 2, deadline: block.timestamp + 1 hours
         });
         bytes memory signature = _signEthIntent(intent, userPrivateKey);
 
@@ -401,10 +388,7 @@ contract DelegateTest is Test {
         nonce = bound(nonce, 100, 999999);
 
         Delegate.EthPaymentIntent memory intent = Delegate.EthPaymentIntent({
-            amount: amount,
-            to: address(0xB0B),
-            nonce: nonce,
-            deadline: block.timestamp + 1 hours
+            amount: amount, to: address(0xB0B), nonce: nonce, deadline: block.timestamp + 1 hours
         });
         bytes memory signature = _signEthIntent(intent, userPrivateKey);
 
