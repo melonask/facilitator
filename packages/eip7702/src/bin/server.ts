@@ -10,7 +10,7 @@ import {
   http,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { Eip7702Mechanism } from "../eip7702.js";
+import { Eip7702Mechanism, KNOWN_DELEGATE_ADDRESSES } from "../eip7702.js";
 import { createHandler, InMemoryNonceManager } from "../handler.js";
 import { serve } from "./serve.js";
 
@@ -27,17 +27,14 @@ async function main() {
     strict: false,
   });
 
-  if (!args["relayer-key"] || !args["delegate-address"] || !args["rpc-url"]) {
-    console.error(
-      "Missing required arguments: --relayer-key, --delegate-address, --rpc-url",
-    );
+  if (!args["relayer-key"] || !args["rpc-url"]) {
+    console.error("Missing required arguments: --relayer-key, --rpc-url");
     process.exit(1);
   }
 
   const PORT = Number(args.port);
   const HOST = args.host as string;
   const RELAYER_KEY = args["relayer-key"] as Hex;
-  const DELEGATE_ADDRESS = args["delegate-address"] as Address;
   const RPC_URL = args["rpc-url"] as string;
 
   // --- Setup ---
@@ -46,6 +43,18 @@ async function main() {
   // Auto-detect chain ID from RPC
   const tempClient = createPublicClient({ transport: http(RPC_URL) });
   const chainId = await tempClient.getChainId();
+
+  // Resolve delegate address: CLI flag takes priority, then known presets
+  const DELEGATE_ADDRESS: Address =
+    (args["delegate-address"] as Address) ?? KNOWN_DELEGATE_ADDRESSES[chainId];
+
+  if (!DELEGATE_ADDRESS) {
+    console.error(
+      `No --delegate-address provided and no known preset for chain ${chainId}. ` +
+        `Supported chains: ${Object.keys(KNOWN_DELEGATE_ADDRESSES).join(", ")}`,
+    );
+    process.exit(1);
+  }
 
   const chain = defineChain({
     id: chainId,

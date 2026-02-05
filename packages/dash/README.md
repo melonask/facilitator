@@ -1,6 +1,6 @@
 # Facilitator Dashboard
 
-<img src="https://raw.githubusercontent.com/melonask/facilitator/refs/heads/main/packages/dash/public/src.png" alt="x402 EIP-7702 Facilitator Dashboard">
+<img src="https://raw.githubusercontent.com/melonask/facilitator/refs/heads/main/packages/dash/public/scr.png" alt="x402 EIP-7702 Facilitator Dashboard">
 
 A real-time, local-first dashboard for monitoring EIP-7702 facilitators. Track balances, transaction history, gas spending, and token transfers across multiple EVM chains.
 

@@ -33,7 +33,8 @@ export interface TokenTransfer {
   address: string; // token contract
   symbol?: string;
   amount: string;
-  to: string;
+  from: string; // actual token sender (payer EOA)
+  to: string;   // payment recipient
 }
 
 export interface Transaction {

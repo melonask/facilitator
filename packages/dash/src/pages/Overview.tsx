@@ -43,7 +43,7 @@ export function Overview() {
     const facilitatorBalances: Array<{ key: string; balance: number; history: number[] }> = [];
 
     facilitators.forEach(f => {
-      const key = `${f.networkId}:${f.id}`;
+      const key = `${f.networkId}:${f.id.toLowerCase()}`;
       const s = stats[key];
       if (s) {
         const bal = BigInt(s.balance);
@@ -825,7 +825,7 @@ export function Overview() {
           <CardContent>
             <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {facilitators.map((f) => {
-                const key = `${f.networkId}:${f.id}`;
+                const key = `${f.networkId}:${f.id.toLowerCase()}`;
                 const s = stats[key];
                 if (!s) return null;
                 const bal = parseFloat(formatEther(BigInt(s.balance)));

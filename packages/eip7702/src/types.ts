@@ -9,7 +9,7 @@ export interface ClientProvider {
 }
 
 export interface Eip7702Config {
-  delegateAddress: Address;
+  delegateAddress?: Address;
   relayerAccount: Account;
   clientProvider: ClientProvider;
   nonceManager: NonceManager;

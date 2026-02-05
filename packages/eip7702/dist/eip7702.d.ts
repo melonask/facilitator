@@ -1,5 +1,8 @@
 import type { PaymentPayload, PaymentRequirements, SchemeNetworkFacilitator, SettleResponse, VerifyResponse } from "@x402/core/types";
+import { type Address } from "viem";
 import { type Eip7702Config } from "./types.js";
+/** Known delegate contract addresses by chain ID. */
+export declare const KNOWN_DELEGATE_ADDRESSES: Record<number, Address>;
 export declare class Eip7702Mechanism implements SchemeNetworkFacilitator {
     private readonly config;
     readonly scheme: "eip7702";
@@ -7,6 +10,7 @@ export declare class Eip7702Mechanism implements SchemeNetworkFacilitator {
     constructor(config: Eip7702Config);
     getExtra(_network: string): undefined;
     getSigners(_network: string): string[];
+    private getDelegateAddress;
     private recoverSigner;
     private verifyIntentSignature;
     private assertAcceptedRequirements;

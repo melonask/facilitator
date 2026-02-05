@@ -3,6 +3,16 @@ import { recoverAuthorizationAddress } from "viem/utils";
 import { DELEGATE_ABI, ERC20_ABI } from "./abi.js";
 import { ADDRESS_ZERO, ErrorReason, } from "./types.js";
 // --- Constants ---
+/** Known delegate contract addresses by chain ID. */
+export const KNOWN_DELEGATE_ADDRESSES = {
+    1: "0xD064939e706dC03699dB7Fe58bB0553afDF39fDd", // Ethereum Mainnet
+    10: "0xD064939e706dC03699dB7Fe58bB0553afDF39fDd", // Optimism
+    56: "0xD064939e706dC03699dB7Fe58bB0553afDF39fDd", // BNB Chain
+    137: "0xD064939e706dC03699dB7Fe58bB0553afDF39fDd", // Polygon
+    8453: "0xD064939e706dC03699dB7Fe58bB0553afDF39fDd", // Base
+    42161: "0xD064939e706dC03699dB7Fe58bB0553afDF39fDd", // Arbitrum
+    43114: "0xD064939e706dC03699dB7Fe58bB0553afDF39fDd", // Avalanche
+};
 /** Grace buffer (seconds) to account for latency between verify and on-chain execution. */
 const EXPIRY_GRACE_SECONDS = 6;
 /** Timeout for waiting on transaction receipts (ms). */
@@ -65,7 +75,14 @@ export class Eip7702Mechanism {
     getSigners(_network) {
         return [this.config.relayerAccount.address];
     }
-    async recoverSigner(authorization) {
+    getDelegateAddress(chainId) {
+        const addr = this.config.delegateAddress ?? KNOWN_DELEGATE_ADDRESSES[chainId];
+        if (!addr) {
+            throw new Error(`No delegate address configured and no known preset for chain ${chainId}`);
+        }
+        return addr;
+    }
+    async recoverSigner(authorization, chainId) {
         const signer = await recoverAuthorizationAddress({
             authorization: {
                 contractAddress: authorization.contractAddress,
@@ -78,7 +95,7 @@ export class Eip7702Mechanism {
                 yParity: authorization.yParity,
             },
         });
-        if (!addrEq(authorization.contractAddress, this.config.delegateAddress)) {
+        if (!addrEq(authorization.contractAddress, this.getDelegateAddress(chainId))) {
             throw new Error(ErrorReason.UntrustedDelegate);
         }
         return signer;
@@ -168,7 +185,7 @@ export class Eip7702Mechanism {
             if (authorization.chainId !== chainId) {
                 return { isValid: false, invalidReason: ErrorReason.ChainIdMismatch };
             }
-            const signer = await this.recoverSigner(authorization);
+            const signer = await this.recoverSigner(authorization, chainId);
             const valid = await this.verifyIntentSignature(payload, ethPayment, chainId, signer, signature);
             if (!valid) {
                 return { isValid: false, invalidReason: ErrorReason.InvalidSignature };

@@ -189,26 +189,26 @@ export function ActivityHeatmap({ data, className, colorScale }: ActivityHeatmap
   };
 
   return (
-    <div className={cn('overflow-x-auto', className)}>
-      <div className="inline-flex flex-col gap-0.5 min-w-max">
+    <div className={cn('w-full', className)}>
+      <div className="flex flex-col gap-0.5">
         {/* Hour labels */}
-        <div className="flex gap-0.5 ml-8">
-          {hours.filter((_, i) => i % 3 === 0).map(h => (
-            <div key={h} className="w-[30px] text-[9px] text-muted-foreground text-center">
-              {h.toString().padStart(2, '0')}
+        <div className="flex gap-px pl-7">
+          {hours.map(h => (
+            <div key={h} className="flex-1 text-[9px] text-muted-foreground text-center">
+              {h % 3 === 0 ? h.toString().padStart(2, '0') : ''}
             </div>
           ))}
         </div>
         {/* Grid */}
         {days.map((day, dayIndex) => (
-          <div key={day} className="flex items-center gap-0.5">
-            <div className="w-7 text-[9px] text-muted-foreground text-right pr-1">{day}</div>
+          <div key={day} className="flex items-center gap-px">
+            <div className="w-7 shrink-0 text-[9px] text-muted-foreground text-right pr-1">{day}</div>
             {hours.map(hour => {
               const value = getValue(dayIndex, hour);
               return (
                 <div
                   key={hour}
-                  className="w-2.5 h-2.5 transition-colors"
+                  className="flex-1 h-3 transition-colors rounded-[1px]"
                   style={{ backgroundColor: getColor(value) }}
                   title={`${day} ${hour}:00 - ${value} tx`}
                 />
@@ -221,7 +221,7 @@ export function ActivityHeatmap({ data, className, colorScale }: ActivityHeatmap
       <div className="flex items-center gap-2 mt-2 text-[9px] text-muted-foreground">
         <span>Less</span>
         {colors.map((color, i) => (
-          <div key={i} className="w-2.5 h-2.5" style={{ backgroundColor: color }} />
+          <div key={i} className="w-2.5 h-2.5 rounded-[1px]" style={{ backgroundColor: color }} />
         ))}
         <span>More</span>
       </div>

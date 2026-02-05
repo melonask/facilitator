@@ -19,13 +19,12 @@ npm install @facilitator/eip7702
 ```bash
 npx @facilitator/eip7702 \
   --relayer-key 0x... \
-  --delegate-address 0x... \
   --rpc-url https://mainnet.infura.io/v3/...
 ```
 
 > **Note:** You can also use `bunx`, `yarn dlx`, or `pnpm dlx` if you prefer.
 
-The chain ID is auto-detected from the RPC endpoint.
+The chain ID is auto-detected from the RPC endpoint. On supported networks, the delegate address is resolved automatically.
 
 ### As a Library
 
@@ -39,7 +38,9 @@ import { mainnet } from "viem/chains";
 const account = privateKeyToAccount("0x...");
 
 const mechanism = new Eip7702Mechanism({
-  delegateAddress: "0x...", // Deployed Delegate.sol address
+  // Optional — auto-detected on supported networks (Ethereum, Polygon, Base, Optimism, Arbitrum, BNB Chain, Avalanche).
+  // Required for custom deployments or unsupported chains.
+  // delegateAddress: "0x...",
   relayerAccount: account, // Pays gas for settlements
   clientProvider: {
     getPublicClient: () =>
@@ -66,13 +67,15 @@ facilitator.register(["eip155:1"], mechanism);
 
 ### CLI Options
 
-| Option               | Default   | Description                     |
-| -------------------- | --------- | ------------------------------- |
-| `--port`             | `8080`    | Server port                     |
-| `--host`             | `0.0.0.0` | Server host                     |
-| `--relayer-key`      | required  | Private key (hex) — pays gas    |
-| `--delegate-address` | required  | Deployed `Delegate.sol` address |
-| `--rpc-url`          | required  | EVM JSON-RPC endpoint           |
+| Option               | Default     | Description                     |
+| -------------------- | ----------- | ------------------------------- |
+| `--port`             | `8080`      | Server port                     |
+| `--host`             | `0.0.0.0`   | Server host                     |
+| `--relayer-key`      | required    | Private key (hex) — pays gas    |
+| `--delegate-address` | auto-detect | Deployed `Delegate.sol` address |
+| `--rpc-url`          | required    | EVM JSON-RPC endpoint           |
+
+`--delegate-address` is auto-detected on Ethereum, Polygon, Base, Optimism, Arbitrum, BNB Chain, and Avalanche. Required for other networks.
 
 ### API Endpoints
 

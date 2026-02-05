@@ -42,6 +42,7 @@ export function TransactionDetailsDialog({ transaction, isOpen, onClose, tokenMe
 
   const val = formatValue(transaction.value);
   const fee = transaction.gasCost ? formatGasFee(transaction.gasCost) : 'Unknown';
+  const hasTokenTransfers = transaction.tokensTransferred.length > 0;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -70,6 +71,11 @@ export function TransactionDetailsDialog({ transaction, isOpen, onClose, tokenMe
 
           {/* Meta info */}
           <div className="flex flex-wrap items-center gap-2">
+            {hasTokenTransfers && (
+              <Badge className="gap-1.5 h-6 text-xs bg-teal-500/15 text-teal-600 dark:text-teal-400 border-teal-500/20 hover:bg-teal-500/15">
+                EIP-7702
+              </Badge>
+            )}
             <Badge variant="outline" className="gap-1.5 font-normal h-6 text-xs">
               <HugeiconsIcon icon={Globe02Icon} className="h-3 w-3" /> {networkName}
             </Badge>
@@ -82,53 +88,113 @@ export function TransactionDetailsDialog({ transaction, isOpen, onClose, tokenMe
             </span>
           </div>
 
-          {/* FROM → TO */}
-          <div className="border bg-muted/20 p-3 space-y-3">
-            {/* From */}
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <div className="h-5 w-5 bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                  <HugeiconsIcon icon={UserIcon} className="h-3 w-3" />
+          {/* Payment Flow for EIP-7702 */}
+          {hasTokenTransfers ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <HugeiconsIcon icon={Link01Icon} className="h-4 w-4" />
+                <span>Payment Flow</span>
+                <Badge variant="secondary" className="ml-auto text-[10px]">
+                  {transaction.tokensTransferred.length} transfer{transaction.tokensTransferred.length !== 1 ? 's' : ''}
+                </Badge>
+              </div>
+              <div className="border divide-y">
+                {transaction.tokensTransferred.map((t, idx) => {
+                  const meta = tokenMetadata[t.address.toLowerCase()];
+                  const isEth = t.address === '0x0000000000000000000000000000000000000000';
+                  const decimals = meta?.decimals ?? 18;
+                  const amount = Number(BigInt(t.amount)) / 10 ** decimals;
+                  const formattedAmount = amount < 0.0001 ? amount.toExponential(2) : amount.toPrecision(4);
+                  const symbol = isEth ? currency : (meta?.symbol || 'TOKEN');
+
+                  return (
+                    <div key={idx} className="p-3 space-y-2.5">
+                      {/* Amount */}
+                      <div className="flex items-center justify-between">
+                        <Badge variant="secondary" className="font-bold text-xs">
+                          {symbol}
+                        </Badge>
+                        <span className="font-mono font-semibold text-sm">
+                          {formattedAmount}
+                        </span>
+                      </div>
+
+                      {/* Payer → Recipient */}
+                      <div className="flex items-center gap-2 text-xs">
+                        <div className="flex-1 min-w-0">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium block mb-0.5">Payer</span>
+                          <div className="bg-muted/50 px-2 py-1.5 font-mono flex items-center gap-1 min-w-0">
+                            <span className="truncate">{shortenAddress(t.from, 4)}</span>
+                            <CopyButton text={t.from} />
+                          </div>
+                        </div>
+                        <HugeiconsIcon icon={ArrowRight01Icon} className="h-3 w-3 text-muted-foreground shrink-0 mt-4" />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium block mb-0.5">Recipient</span>
+                          <div className="bg-muted/50 px-2 py-1.5 font-mono flex items-center gap-1 min-w-0">
+                            <span className="truncate">{shortenAddress(t.to, 4)}</span>
+                            <CopyButton text={t.to} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            /* Standard FROM → TO for non-payment transactions */
+            <div className="border bg-muted/20 p-3 space-y-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="h-5 w-5 bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <HugeiconsIcon icon={UserIcon} className="h-3 w-3" />
+                  </div>
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">From</span>
                 </div>
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">From (Facilitator)</span>
-              </div>
-              <div className="bg-background border px-3 py-2 font-mono text-xs flex items-center gap-2 min-w-0">
-                <span className="truncate flex-1">{transaction.from}</span>
-                <CopyButton text={transaction.from} />
-              </div>
-            </div>
-
-            {/* Arrow */}
-            <div className="flex justify-center">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <div className="h-px w-8 bg-border" />
-                <HugeiconsIcon icon={ArrowRight01Icon} className="h-4 w-4 rotate-90" />
-                <div className="h-px w-8 bg-border" />
-              </div>
-            </div>
-
-            {/* To */}
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <div className="h-5 w-5 bg-muted text-muted-foreground flex items-center justify-center shrink-0">
-                  <HugeiconsIcon icon={CheckListIcon} className="h-3 w-3" />
+                <div className="bg-background border px-3 py-2 font-mono text-xs flex items-center gap-2 min-w-0">
+                  <span className="truncate flex-1">{transaction.from}</span>
+                  <CopyButton text={transaction.from} />
                 </div>
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                  {transaction.tokensTransferred.length > 0 ? 'Contract' : 'To'}
-                </span>
               </div>
-              <div className="bg-background border px-3 py-2 font-mono text-xs flex items-center gap-2 min-w-0">
-                <span className="truncate flex-1">{transaction.to || 'Contract Creation'}</span>
-                {transaction.to && <CopyButton text={transaction.to} />}
+              <div className="flex justify-center">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <div className="h-px w-8 bg-border" />
+                  <HugeiconsIcon icon={ArrowRight01Icon} className="h-4 w-4 rotate-90" />
+                  <div className="h-px w-8 bg-border" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="h-5 w-5 bg-muted text-muted-foreground flex items-center justify-center shrink-0">
+                    <HugeiconsIcon icon={CheckListIcon} className="h-3 w-3" />
+                  </div>
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">To</span>
+                </div>
+                <div className="bg-background border px-3 py-2 font-mono text-xs flex items-center gap-2 min-w-0">
+                  <span className="truncate flex-1">{transaction.to || 'Contract Creation'}</span>
+                  {transaction.to && <CopyButton text={transaction.to} />}
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Value and Gas Fee */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Relayer & Gas */}
+          <div className={`grid gap-3 ${hasTokenTransfers ? 'grid-cols-3' : 'grid-cols-2'}`}>
+            {hasTokenTransfers && (
+              <div className="p-3 border bg-muted/20 space-y-1">
+                <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                  <HugeiconsIcon icon={UserIcon} className="h-3 w-3" /> Relayer
+                </div>
+                <div className="font-mono text-xs truncate" title={transaction.from}>
+                  {shortenAddress(transaction.from, 4)}
+                </div>
+                <p className="text-[10px] text-muted-foreground">Paid gas</p>
+              </div>
+            )}
             <div className="p-3 border bg-muted/20 space-y-1">
               <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                <HugeiconsIcon icon={Coins01Icon} className="h-3 w-3" /> Value
+                <HugeiconsIcon icon={Coins01Icon} className="h-3 w-3" /> {hasTokenTransfers ? 'Tx Value' : 'Value'}
               </div>
               <div className="text-lg font-bold font-mono truncate" title={`${formatEther(BigInt(transaction.value))} ${currency}`}>
                 {val}
@@ -145,52 +211,6 @@ export function TransactionDetailsDialog({ transaction, isOpen, onClose, tokenMe
               </div>
             </div>
           </div>
-
-          {/* Token Transfers */}
-          {transaction.tokensTransferred.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <HugeiconsIcon icon={Link01Icon} className="h-4 w-4" />
-                <span>Token Transfers</span>
-                <Badge variant="secondary" className="ml-auto text-[10px]">
-                  {transaction.tokensTransferred.length}
-                </Badge>
-              </div>
-              <div className="border divide-y">
-                {transaction.tokensTransferred.map((t, idx) => {
-                  const meta = tokenMetadata[t.address.toLowerCase()];
-                  const amount = parseFloat(formatEther(BigInt(t.amount)));
-                  const formattedAmount = amount < 0.0001 ? amount.toExponential(2) : amount.toPrecision(4);
-
-                  return (
-                    <div key={idx} className="p-3 space-y-2">
-                      {/* Token and Amount */}
-                      <div className="flex items-center justify-between">
-                        <Badge variant="secondary" className="font-bold text-xs">
-                          {meta?.symbol || 'TOKEN'}
-                        </Badge>
-                        <span className="font-mono font-semibold text-sm">
-                          {formattedAmount}
-                        </span>
-                      </div>
-
-                      {/* Flow */}
-                      <div className="flex items-center gap-2 text-xs">
-                        <div className="flex-1 min-w-0 bg-muted/50 px-2 py-1.5 font-mono truncate">
-                          {shortenAddress(transaction.from, 4)}
-                        </div>
-                        <HugeiconsIcon icon={ArrowRight01Icon} className="h-3 w-3 text-muted-foreground shrink-0" />
-                        <div className="flex-1 min-w-0 bg-muted/50 px-2 py-1.5 font-mono flex items-center gap-1">
-                          <span className="truncate">{shortenAddress(t.to, 4)}</span>
-                          <CopyButton text={t.to} />
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
       </DialogContent>
     </Dialog>

@@ -24,6 +24,17 @@ import {
 
 // --- Constants ---
 
+/** Known delegate contract addresses by chain ID. */
+export const KNOWN_DELEGATE_ADDRESSES: Record<number, Address> = {
+  1: "0xD064939e706dC03699dB7Fe58bB0553afDF39fDd", // Ethereum Mainnet
+  10: "0xD064939e706dC03699dB7Fe58bB0553afDF39fDd", // Optimism
+  56: "0xD064939e706dC03699dB7Fe58bB0553afDF39fDd", // BNB Chain
+  137: "0xD064939e706dC03699dB7Fe58bB0553afDF39fDd", // Polygon
+  8453: "0xD064939e706dC03699dB7Fe58bB0553afDF39fDd", // Base
+  42161: "0xD064939e706dC03699dB7Fe58bB0553afDF39fDd", // Arbitrum
+  43114: "0xD064939e706dC03699dB7Fe58bB0553afDF39fDd", // Avalanche
+};
+
 /** Grace buffer (seconds) to account for latency between verify and on-chain execution. */
 const EXPIRY_GRACE_SECONDS = 6;
 
@@ -101,7 +112,17 @@ export class Eip7702Mechanism implements SchemeNetworkFacilitator {
     return [this.config.relayerAccount.address];
   }
 
-  private async recoverSigner(authorization: Eip7702Authorization) {
+  private getDelegateAddress(chainId: number): Address {
+    const addr = this.config.delegateAddress ?? KNOWN_DELEGATE_ADDRESSES[chainId];
+    if (!addr) {
+      throw new Error(
+        `No delegate address configured and no known preset for chain ${chainId}`,
+      );
+    }
+    return addr;
+  }
+
+  private async recoverSigner(authorization: Eip7702Authorization, chainId: number) {
     const signer = await recoverAuthorizationAddress({
       authorization: {
         contractAddress: authorization.contractAddress,
@@ -115,7 +136,7 @@ export class Eip7702Mechanism implements SchemeNetworkFacilitator {
       },
     });
 
-    if (!addrEq(authorization.contractAddress, this.config.delegateAddress)) {
+    if (!addrEq(authorization.contractAddress, this.getDelegateAddress(chainId))) {
       throw new Error(ErrorReason.UntrustedDelegate);
     }
 
@@ -245,7 +266,7 @@ export class Eip7702Mechanism implements SchemeNetworkFacilitator {
         return { isValid: false, invalidReason: ErrorReason.ChainIdMismatch };
       }
 
-      const signer = await this.recoverSigner(authorization);
+      const signer = await this.recoverSigner(authorization, chainId);
 
       const valid = await this.verifyIntentSignature(
         payload,

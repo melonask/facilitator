@@ -8,6 +8,8 @@ const clients: Record<string, any> = {};
 const lastScannedBlock: Record<string, bigint> = {};
 
 const TRANSFER_EVENT = parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)');
+const PAYMENT_EXECUTED_EVENT = parseAbiItem('event PaymentExecuted(address indexed token, address indexed to, uint256 amount, uint256 indexed nonce)');
+const ETH_PAYMENT_EXECUTED_EVENT = parseAbiItem('event EthPaymentExecuted(address indexed to, uint256 amount, uint256 indexed nonce)');
 const SYMBOL_ABI = parseAbiItem('function symbol() view returns (string)');
 const DECIMALS_ABI = parseAbiItem('function decimals() view returns (uint8)');
 
@@ -45,7 +47,7 @@ export function DataManager() {
                 client.getTransactionCount({ address: fac.id as `0x${string}` })
              ]);
 
-             const key = `${network.id}:${fac.id}`;
+             const key = `${network.id}:${fac.id.toLowerCase()}`;
              const timestamp = Date.now();
              
              updateStats(key, {
@@ -127,45 +129,75 @@ export function DataManager() {
                               
                               const tokensTransferred: TokenTransfer[] = [];
 
-                              for (const log of receipt.logs) {
+                              const fetchTokenMeta = async (addr: string) => {
+                                  const key = addr.toLowerCase();
+                                  if (tokenMetadata[key]) return;
                                   try {
-                                      // Try to decode as Transfer event
+                                      const [symbol, decimals] = await Promise.all([
+                                          client.readContract({ address: addr as `0x${string}`, abi: [SYMBOL_ABI], functionName: 'symbol' }).catch(() => 'UNK'),
+                                          client.readContract({ address: addr as `0x${string}`, abi: [DECIMALS_ABI], functionName: 'decimals' }).catch(() => 18),
+                                      ]);
+                                      addTokenMetadata(key, { symbol: symbol as string, decimals: Number(decimals) });
+                                  } catch { /* ignore */ }
+                              };
+
+                              for (const log of receipt.logs) {
+                                  // Try standard ERC-20 Transfer event
+                                  try {
                                       const decoded = decodeEventLog({
                                           abi: [TRANSFER_EVENT],
                                           data: log.data,
                                           topics: log.topics
                                       });
-                                      
                                       if (decoded.eventName === 'Transfer') {
-                                          const tokenAddress = log.address.toLowerCase();
-                                          
-                                          // Fetch Metadata if unknown
-                                          if (!tokenMetadata[tokenAddress]) {
-                                              try {
-                                                  // Best effort fetch
-                                                  const [symbol, decimals] = await Promise.all([
-                                                      client.readContract({ address: log.address, abi: [SYMBOL_ABI], functionName: 'symbol' }).catch(() => 'UNK'),
-                                                      client.readContract({ address: log.address, abi: [DECIMALS_ABI], functionName: 'decimals' }).catch(() => 18),
-                                                  ]);
-                                                  
-                                                  addTokenMetadata(tokenAddress, { 
-                                                      symbol: symbol as string, 
-                                                      decimals: Number(decimals) 
-                                                  });
-                                              } catch {
-                                                  // ignore
-                                              }
-                                          }
-
+                                          await fetchTokenMeta(log.address);
                                           tokensTransferred.push({
                                               address: log.address,
                                               amount: decoded.args.value.toString(),
+                                              from: decoded.args.from,
                                               to: decoded.args.to
                                           });
+                                          continue;
                                       }
-                                  } catch {
-                                      // Not a standard transfer event, ignore
-                                  }
+                                  } catch { /* not a Transfer event */ }
+
+                                  // Try Delegate PaymentExecuted event
+                                  try {
+                                      const decoded = decodeEventLog({
+                                          abi: [PAYMENT_EXECUTED_EVENT],
+                                          data: log.data,
+                                          topics: log.topics
+                                      });
+                                      if (decoded.eventName === 'PaymentExecuted') {
+                                          const tokenAddr = decoded.args.token;
+                                          await fetchTokenMeta(tokenAddr);
+                                          tokensTransferred.push({
+                                              address: tokenAddr,
+                                              amount: decoded.args.amount.toString(),
+                                              from: log.address, // payer EOA (Delegate code runs in their context)
+                                              to: decoded.args.to
+                                          });
+                                          continue;
+                                      }
+                                  } catch { /* not a PaymentExecuted event */ }
+
+                                  // Try Delegate EthPaymentExecuted event
+                                  try {
+                                      const decoded = decodeEventLog({
+                                          abi: [ETH_PAYMENT_EXECUTED_EVENT],
+                                          data: log.data,
+                                          topics: log.topics
+                                      });
+                                      if (decoded.eventName === 'EthPaymentExecuted') {
+                                          tokensTransferred.push({
+                                              address: '0x0000000000000000000000000000000000000000',
+                                              amount: decoded.args.amount.toString(),
+                                              from: log.address, // payer EOA
+                                              to: decoded.args.to
+                                          });
+                                          continue;
+                                      }
+                                  } catch { /* not an EthPaymentExecuted event */ }
                               }
 
                               relevantTxs.push({

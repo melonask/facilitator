@@ -10,6 +10,7 @@ interface SparklineProps {
   color?: string;
   showArea?: boolean;
   showDot?: boolean;
+  responsive?: boolean;
 }
 
 export function Sparkline({
@@ -21,6 +22,7 @@ export function Sparkline({
   color = 'currentColor',
   showArea = false,
   showDot = true,
+  responsive = false,
 }: SparklineProps) {
   const path = useMemo(() => {
     if (data.length < 2) return '';
@@ -97,7 +99,7 @@ export function Sparkline({
 
   if (data.length < 2) {
     return (
-      <div className={cn('flex items-center justify-center text-muted-foreground text-xs', className)} style={{ width, height }}>
+      <div className={cn('flex items-center justify-center text-muted-foreground text-xs', className)} style={responsive ? { width: '100%', height } : { width, height }}>
         --
       </div>
     );
@@ -108,10 +110,11 @@ export function Sparkline({
 
   return (
     <svg
-      width={width}
+      width={responsive ? '100%' : width}
       height={height}
       className={cn('overflow-visible', className)}
       viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio={responsive ? 'none' : undefined}
     >
       {showArea && (
         <path

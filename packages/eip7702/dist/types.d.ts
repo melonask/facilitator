@@ -5,7 +5,7 @@ export interface ClientProvider {
     getWalletClient(chainId: number): WalletClient;
 }
 export interface Eip7702Config {
-    delegateAddress: Address;
+    delegateAddress?: Address;
     relayerAccount: Account;
     clientProvider: ClientProvider;
     nonceManager: NonceManager;
