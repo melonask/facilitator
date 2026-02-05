@@ -5,10 +5,11 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatEther } from 'viem';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Clock01Icon, Coins01Icon, Fire02Icon } from '@hugeicons/core-free-icons';
+import { Coins01Icon, Fire02Icon, Analytics01Icon } from '@hugeicons/core-free-icons';
 import { TransactionDetailsDialog } from '@/components/TransactionDetailsDialog';
-import { Sparkline } from '@/components/ui/sparkline';
-import { FileText, ArrowRight, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Sparkline, TrendIndicator } from '@/components/ui/sparkline';
+import { ComparisonBar } from '@/components/ui/progress-bar';
+import { FileText, ArrowRight, Search, ChevronLeft, ChevronRight, TrendingUp, Zap } from 'lucide-react';
 
 const ITEMS_PER_PAGE = 25;
 
@@ -79,8 +80,42 @@ export function Transactions() {
       hourlyData.push(count);
     }
 
-    return { totalValue, totalGas, totalTokens, hourlyData };
+    // Average gas per transaction
+    const avgGas = filteredTxs.length > 0 ? totalGas / BigInt(filteredTxs.length) : 0n;
+
+    // Average value per transaction
+    const avgValue = filteredTxs.length > 0 ? totalValue / BigInt(filteredTxs.length) : 0n;
+
+    // Unique senders and receivers
+    const uniqueSenders = new Set(filteredTxs.map(tx => tx.from.toLowerCase())).size;
+    const uniqueReceivers = new Set(filteredTxs.filter(tx => tx.to).map(tx => tx.to!.toLowerCase())).size;
+
+    return { totalValue, totalGas, totalTokens, hourlyData, avgGas, avgValue, uniqueSenders, uniqueReceivers };
   }, [filteredTxs, now]);
+
+  // Period comparison for trends
+  const periodComparison = useMemo(() => {
+    const periodLength = now - startTime;
+    if (periodLength <= 0 || timeRange === 'all') return null;
+
+    const prevStart = startTime - periodLength;
+    const prevTxs = transactions.filter(t => t.timestamp >= prevStart && t.timestamp < startTime);
+
+    const currentCount = filteredTxs.length;
+    const prevCount = prevTxs.length;
+    const countChange = prevCount > 0 ? ((currentCount - prevCount) / prevCount) * 100 : currentCount > 0 ? 100 : 0;
+
+    const currentGas = filteredTxs.reduce((sum, tx) => sum + BigInt(tx.gasCost || 0), 0n);
+    const prevGas = prevTxs.reduce((sum, tx) => sum + BigInt(tx.gasCost || 0), 0n);
+
+    return {
+      currentCount,
+      prevCount,
+      countChange,
+      currentGas: parseFloat(formatEther(currentGas)),
+      prevGas: parseFloat(formatEther(prevGas)),
+    };
+  }, [filteredTxs, transactions, startTime, now, timeRange]);
 
   const formatTxValue = (value: string) => {
     const val = BigInt(value);
@@ -107,8 +142,8 @@ export function Transactions() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Transactions</h2>
-          <p className="text-muted-foreground text-sm mt-1">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Transactions</h2>
+          <p className="text-muted-foreground text-xs sm:text-sm mt-1">
             {filteredTxs.length} transaction{filteredTxs.length !== 1 ? 's' : ''} found
           </p>
         </div>
@@ -129,7 +164,15 @@ export function Transactions() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground font-medium">Transactions</p>
-              <p className="text-2xl font-bold mt-1">{filteredTxs.length}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <p className="text-2xl font-bold">{filteredTxs.length}</p>
+                {periodComparison && (
+                  <TrendIndicator value={periodComparison.countChange} className="text-[10px]" />
+                )}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                {stats.uniqueSenders} unique sender{stats.uniqueSenders !== 1 ? 's' : ''}
+              </p>
             </div>
             <div className="flex flex-col items-end gap-1">
               <div className="p-2 bg-teal-500/10">
@@ -147,9 +190,12 @@ export function Transactions() {
             <div>
               <p className="text-xs text-muted-foreground font-medium">Total Value</p>
               <p className="text-2xl font-bold mt-1">{parseFloat(formatEther(stats.totalValue)).toFixed(4)}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Avg: {parseFloat(formatEther(stats.avgValue)).toFixed(6)}
+              </p>
             </div>
-            <div className="p-2 bg-teal-500/10">
-              <HugeiconsIcon icon={Coins01Icon} className="h-4 w-4 text-teal-500" />
+            <div className="p-2 bg-emerald-500/10">
+              <TrendingUp className="h-4 w-4 text-emerald-500" />
             </div>
           </div>
         </Card>
@@ -159,6 +205,9 @@ export function Transactions() {
             <div>
               <p className="text-xs text-muted-foreground font-medium">Gas Spent</p>
               <p className="text-2xl font-bold mt-1">{parseFloat(formatEther(stats.totalGas)).toFixed(4)}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Avg: {parseFloat(formatEther(stats.avgGas)).toFixed(6)}/tx
+              </p>
             </div>
             <div className="p-2 bg-orange-500/10">
               <HugeiconsIcon icon={Fire02Icon} className="h-4 w-4 text-orange-500" />
@@ -171,13 +220,43 @@ export function Transactions() {
             <div>
               <p className="text-xs text-muted-foreground font-medium">Token Transfers</p>
               <p className="text-2xl font-bold mt-1">{stats.totalTokens}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                {stats.uniqueReceivers} recipient{stats.uniqueReceivers !== 1 ? 's' : ''}
+              </p>
             </div>
-            <div className="p-2 bg-cyan-500/10">
-              <HugeiconsIcon icon={Clock01Icon} className="h-4 w-4 text-cyan-500" />
+            <div className="p-2 bg-pink-500/10">
+              <HugeiconsIcon icon={Analytics01Icon} className="h-4 w-4 text-pink-500" />
             </div>
           </div>
         </Card>
       </div>
+
+      {/* Period Comparison (when not viewing all time) */}
+      {periodComparison && timeRange !== 'all' && (
+        <Card className="p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="p-1.5 bg-indigo-500/10">
+              <Zap className="h-3.5 w-3.5 text-indigo-500" />
+            </div>
+            <h3 className="text-sm font-medium">Period Comparison</h3>
+            <span className="text-xs text-muted-foreground">vs previous {timeRange}</span>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <ComparisonBar
+              current={periodComparison.currentCount}
+              previous={periodComparison.prevCount}
+              label="Transactions"
+              format={(v) => v.toString()}
+            />
+            <ComparisonBar
+              current={periodComparison.currentGas}
+              previous={periodComparison.prevGas}
+              label="Gas Spent"
+              format={(v) => v.toFixed(4)}
+            />
+          </div>
+        </Card>
+      )}
 
       {/* Filters */}
       <Card className="p-3 sm:p-4">

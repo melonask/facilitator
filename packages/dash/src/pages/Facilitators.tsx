@@ -8,12 +8,12 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Area, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, ComposedChart, Line } from 'recharts';
 import { formatEther } from 'viem';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { ChartHistogramIcon, Alert01Icon, LockIcon, Coins01Icon } from '@hugeicons/core-free-icons';
+import { ChartHistogramIcon, Alert01Icon, LockIcon, Coins01Icon, CheckmarkCircle02Icon } from '@hugeicons/core-free-icons';
 import { CopyButton } from '@/components/CopyButton';
 import { Sparkline, TrendIndicator } from '@/components/ui/sparkline';
 import { MiniStat } from '@/components/ui/stat-card';
-import { ProgressBar } from '@/components/ui/progress-bar';
-import { Filter, Wallet, Activity, Fuel } from 'lucide-react';
+import { ProgressBar, HealthScore } from '@/components/ui/progress-bar';
+import { Filter, Wallet, Activity, Fuel, TrendingUp, Clock } from 'lucide-react';
 
 const NETWORK_COLORS = [
   '#14b8a6', '#f97316', '#22c55e', '#06b6d4',
@@ -102,6 +102,50 @@ export function Facilitators() {
     const idx = networks.findIndex(n => n.id === networkId);
     return NETWORK_COLORS[idx % NETWORK_COLORS.length];
   };
+
+  // Calculate health score for a facilitator
+  const getFacilitatorHealth = (balance: number, txCount: number, balanceHistory: number[]) => {
+    let score = 100;
+
+    // Balance health (40% weight)
+    if (balance < 0.01) score -= 40;
+    else if (balance < 0.05) score -= 25;
+    else if (balance < 0.1) score -= 15;
+
+    // Balance trend (30% weight)
+    if (balanceHistory.length >= 2) {
+      const trend = (balanceHistory[balanceHistory.length - 1] - balanceHistory[0]) / (balanceHistory[0] || 1);
+      if (trend < -0.5) score -= 30;
+      else if (trend < -0.2) score -= 15;
+    }
+
+    // Activity (30% weight)
+    if (txCount === 0) score -= 10;
+
+    return Math.max(0, Math.min(100, score));
+  };
+
+  // Recent activity for each facilitator
+  const recentActivityByFacilitator = useMemo(() => {
+    const now = Date.now();
+    const oneDayAgo = now - 24 * 60 * 60 * 1000;
+    const activityMap: Record<string, { count: number; lastTx: number | null }> = {};
+
+    transactions.forEach(tx => {
+      const key = `${tx.networkId}:${tx.from.toLowerCase()}`;
+      if (!activityMap[key]) {
+        activityMap[key] = { count: 0, lastTx: null };
+      }
+      if (tx.timestamp >= oneDayAgo) {
+        activityMap[key].count++;
+      }
+      if (!activityMap[key].lastTx || tx.timestamp > activityMap[key].lastTx) {
+        activityMap[key].lastTx = tx.timestamp;
+      }
+    });
+
+    return activityMap;
+  }, [transactions]);
 
   // Analytics Dialog Component - reused in both grid and compact views
   const renderAnalyticsDialog = (
@@ -256,8 +300,8 @@ export function Facilitators() {
       {/* Header with filters */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Facilitators</h2>
-          <p className="text-muted-foreground text-sm mt-1">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Facilitators</h2>
+          <p className="text-muted-foreground text-xs sm:text-sm mt-1">
             {facilitators.length} facilitator{facilitators.length !== 1 ? 's' : ''} across {networks.length} network{networks.length !== 1 ? 's' : ''}
           </p>
         </div>
@@ -302,7 +346,7 @@ export function Facilitators() {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-5">
         <Card className="p-3">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-teal-500/10">
@@ -354,11 +398,31 @@ export function Facilitators() {
         </Card>
         <Card className="p-3">
           <div className="flex items-center gap-2">
+            <div className="p-2 bg-emerald-500/10">
+              <HugeiconsIcon icon={CheckmarkCircle02Icon} className="h-4 w-4 text-emerald-500" strokeWidth={2} />
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Healthy</p>
+              <p className="text-lg font-bold">
+                {facilitators.filter(f => {
+                  const key = `${f.networkId}:${f.id}`;
+                  const s = stats[key];
+                  const balance = s ? parseFloat(formatEther(BigInt(s.balance))) : 0;
+                  const history = s?.history?.slice(-20).map(h => parseFloat(formatEther(BigInt(h.balance)))) || [];
+                  return getFacilitatorHealth(balance, s?.txCount || 0, history) >= 70;
+                }).length}
+                <span className="text-xs text-muted-foreground font-normal ml-1">/ {facilitators.length}</span>
+              </p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-3">
+          <div className="flex items-center gap-2">
             <div className="p-2 bg-red-500/10">
               <HugeiconsIcon icon={Alert01Icon} className="h-4 w-4 text-red-500" strokeWidth={2} />
             </div>
             <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Low Balance</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Need Attention</p>
               <p className="text-lg font-bold">
                 {facilitators.filter(f => {
                   const key = `${f.networkId}:${f.id}`;
@@ -397,16 +461,31 @@ export function Facilitators() {
               txCount: Number(h.txCount)
             })) || [];
 
+            // Health score and recent activity
+            const healthScore = getFacilitatorHealth(balance, txCount, balanceHistory);
+            const activity = recentActivityByFacilitator[key];
+            const recentTxCount = activity?.count || 0;
+            const lastTxTime = activity?.lastTx;
+
+            const formatLastActive = (timestamp: number | null) => {
+              if (!timestamp) return 'Never';
+              const diff = Date.now() - timestamp;
+              if (diff < 60000) return 'Just now';
+              if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+              if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+              return `${Math.floor(diff / 86400000)}d ago`;
+            };
+
             return (
-              <Card key={key} className={`overflow-hidden ${isLowBalance ? 'border-destructive/50' : ''}`}>
+              <Card key={key} className={`overflow-hidden transition-all hover:shadow-sm ${isLowBalance ? 'border-destructive/50' : ''}`}>
                 <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                   <div className="space-y-1 overflow-hidden w-full">
                     <div className="flex items-center gap-2">
                       <span
-                        className="w-2 h-2  shrink-0"
+                        className="w-2 h-2 shrink-0"
                         style={{ backgroundColor: getNetworkColor(f.networkId) }}
                       />
-                      <CardTitle className="text-base font-medium truncate max-w-[140px]" title={f.label || f.id}>
+                      <CardTitle className="text-base font-medium truncate max-w-[120px]" title={f.label || f.id}>
                         {f.label || f.id.slice(0, 8) + '...'}
                       </CardTitle>
                       {f.privateKey && (
@@ -420,18 +499,7 @@ export function Facilitators() {
                       <CopyButton text={f.id} />
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-1">
-                    {isLowBalance && <HugeiconsIcon icon={Alert01Icon} className="text-destructive h-5 w-5 shrink-0" strokeWidth={2} />}
-                    {balanceHistory.length > 1 && (
-                      <Sparkline
-                        data={balanceHistory}
-                        width={60}
-                        height={20}
-                        color="auto"
-                        showArea
-                      />
-                    )}
-                  </div>
+                  <HealthScore score={healthScore} size="sm" />
                 </CardHeader>
                 <CardContent>
                   {/* Main stats */}
@@ -464,12 +532,37 @@ export function Facilitators() {
                       <MiniStat label="Gas Spent" value={`${parseFloat(formatEther(gasSpent)).toFixed(4)}`} />
                     </div>
 
-                    {/* Token transfers badge */}
-                    {tokenCount > 0 && (
-                      <Badge variant="secondary" className="text-xs">
-                        <HugeiconsIcon icon={Coins01Icon} className="h-3 w-3 mr-1" strokeWidth={2} />
-                        {tokenCount} token transfer{tokenCount !== 1 ? 's' : ''}
-                      </Badge>
+                    {/* Activity row */}
+                    <div className="flex items-center justify-between pt-2 mt-2 border-t">
+                      <div className="flex items-center gap-3">
+                        {tokenCount > 0 && (
+                          <Badge variant="secondary" className="text-[10px] h-5">
+                            <HugeiconsIcon icon={Coins01Icon} className="h-3 w-3 mr-1" strokeWidth={2} />
+                            {tokenCount} tokens
+                          </Badge>
+                        )}
+                        {recentTxCount > 0 && (
+                          <Badge variant="outline" className="text-[10px] h-5">
+                            <TrendingUp className="h-3 w-3 mr-1" />
+                            {recentTxCount} today
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        {formatLastActive(lastTxTime)}
+                      </div>
+                    </div>
+
+                    {/* Sparkline */}
+                    {balanceHistory.length > 1 && (
+                      <div className="pt-2 mt-2 border-t">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] text-muted-foreground">Balance trend</span>
+                          {balanceTrend !== 0 && <TrendIndicator value={balanceTrend} className="text-[10px]" />}
+                        </div>
+                        <Sparkline data={balanceHistory} width={200} height={24} color="auto" showArea />
+                      </div>
                     )}
                   </div>
 

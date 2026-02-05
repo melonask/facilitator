@@ -25,11 +25,12 @@ import {Delegate} from "@facilitator/contracts/Delegate.sol";
 ///   DEPLOY_SALT           - (Optional) 32-byte hex salt, defaults to zero
 contract DeployDelegate is Script {
     function run() external {
-        deploy(vm.envOr("DEPLOY_SALT", bytes32(0)));
+        uint256 deployerKey = vm.envOr("DEPLOYER_PRIVATE_KEY", uint256(0));
+        deploy(vm.envOr("DEPLOY_SALT", bytes32(0)), deployerKey);
     }
 
     function deploy(bytes32 salt) public {
-        deploy(salt, vm.envUint("DEPLOYER_PRIVATE_KEY"));
+        deploy(salt, vm.envOr("DEPLOYER_PRIVATE_KEY", uint256(0)));
     }
 
     function deploy(bytes32 salt, uint256 deployerKey) public {
@@ -45,7 +46,12 @@ contract DeployDelegate is Script {
             return;
         }
 
-        vm.startBroadcast(deployerKey);
+        if (deployerKey != 0) {
+            vm.startBroadcast(deployerKey);
+        } else {
+            vm.startBroadcast();
+        }
+
         (bool success,) = CREATE2_FACTORY.call(abi.encodePacked(salt, initCode));
         vm.stopBroadcast();
 

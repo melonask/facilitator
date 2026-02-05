@@ -88,7 +88,15 @@ export function Settings() {
 
   return (
     <div className="space-y-6">
-    <div className="grid gap-6 lg:grid-cols-2">
+      {/* Header */}
+      <div>
+        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Settings</h2>
+        <p className="text-muted-foreground text-sm mt-1">
+          Manage networks and facilitators
+        </p>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
       {/* Networks Section */}
       <Card>
         <CardHeader>

@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useStore, type Transaction } from '@/store/useStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatCard, NetworkStatRow } from '@/components/ui/stat-card';
-import { StackedBar } from '@/components/ui/progress-bar';
+import { StackedBar, ActivityHeatmap, HealthScore } from '@/components/ui/progress-bar';
 import { Sparkline } from '@/components/ui/sparkline';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
@@ -254,13 +254,85 @@ export function Overview() {
   // Total token transfers in period
   const totalTokenTransfers = filteredTxs.reduce((sum, tx) => sum + tx.tokensTransferred.length, 0);
 
+  // Hourly transaction data for sparkline
+  const hourlyTxData = useMemo(() => {
+    const hourlyBuckets: number[] = [];
+    for (let i = 23; i >= 0; i--) {
+      const hourStart = now - (i + 1) * 3600 * 1000;
+      const hourEnd = now - i * 3600 * 1000;
+      const count = filteredTxs.filter(tx => tx.timestamp >= hourStart && tx.timestamp < hourEnd).length;
+      hourlyBuckets.push(count);
+    }
+    return hourlyBuckets;
+  }, [filteredTxs, now]);
+
+  // Activity heatmap data (last 7 days)
+  const activityHeatmapData = useMemo(() => {
+    const data: Array<{ hour: number; day: number; value: number }> = [];
+    const nowDate = new Date();
+
+    for (let d = 0; d < 7; d++) {
+      for (let h = 0; h < 24; h++) {
+        const dayOffset = (nowDate.getDay() - d + 7) % 7;
+        const dayStart = new Date(nowDate);
+        dayStart.setDate(dayStart.getDate() - d);
+        dayStart.setHours(h, 0, 0, 0);
+        const dayEnd = new Date(dayStart);
+        dayEnd.setHours(h + 1, 0, 0, 0);
+
+        const count = transactions.filter(tx =>
+          tx.timestamp >= dayStart.getTime() && tx.timestamp < dayEnd.getTime()
+        ).length;
+
+        data.push({ day: dayOffset, hour: h, value: count });
+      }
+    }
+    return data;
+  }, [transactions]);
+
+  // System health score
+  const healthScore = useMemo(() => {
+    let score = 100;
+    // Deduct for low balance facilitators
+    score -= metrics.lowBalanceCount * 15;
+    // Deduct if no recent transactions
+    if (filteredTxs.length === 0 && timeRange !== 'all') score -= 20;
+    // Deduct for high gas spending trend
+    if (gasSpentTrend > 50) score -= 10;
+    return Math.max(0, Math.min(100, score));
+  }, [metrics.lowBalanceCount, filteredTxs.length, timeRange, gasSpentTrend]);
+
+  // Average gas per transaction
+  const avgGasPerTx = useMemo(() => {
+    if (filteredTxs.length === 0) return 0n;
+    return gasSpentInPeriod / BigInt(filteredTxs.length);
+  }, [gasSpentInPeriod, filteredTxs.length]);
+
+  // Peak activity hour
+  const peakHour = useMemo(() => {
+    const hourCounts: Record<number, number> = {};
+    filteredTxs.forEach(tx => {
+      const hour = new Date(tx.timestamp).getHours();
+      hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+    });
+    let maxHour = 0;
+    let maxCount = 0;
+    Object.entries(hourCounts).forEach(([h, count]) => {
+      if (count > maxCount) {
+        maxCount = count;
+        maxHour = parseInt(h);
+      }
+    });
+    return { hour: maxHour, count: maxCount };
+  }, [filteredTxs]);
+
   return (
     <div className="space-y-6">
       {/* Header with Time Filter */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Overview</h2>
-          <p className="text-muted-foreground text-sm mt-1">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Overview</h2>
+          <p className="text-muted-foreground text-xs sm:text-sm mt-1">
             Monitor your facilitators across {networks.length} network{networks.length !== 1 ? 's' : ''}
           </p>
         </div>
@@ -287,14 +359,26 @@ export function Overview() {
         </div>
       </div>
 
-      {/* Main KPI Cards - 2 rows */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* Main KPI Cards with Health Score */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        {/* Health Score Card */}
+        <Card className="p-4 flex flex-col items-center justify-center lg:row-span-2">
+          <p className="text-sm font-medium text-muted-foreground mb-3">System Health</p>
+          <HealthScore score={healthScore} size="lg" />
+          <div className="mt-3 text-center">
+            <p className="text-xs text-muted-foreground">
+              {metrics.lowBalanceCount > 0 ? `${metrics.lowBalanceCount} low balance` : 'All systems normal'}
+            </p>
+          </div>
+        </Card>
+
         <StatCard
-          title="Total Facilitators"
+          title="Facilitators"
           value={facilitators.length}
-          subtitle={`${metrics.lowBalanceCount} low balance`}
+          subtitle={`${metrics.lowBalanceCount} need attention`}
           icon={<HugeiconsIcon icon={Activity01Icon} className="h-4 w-4" strokeWidth={2} />}
           iconClassName="p-2 bg-teal-500/10 text-teal-500"
+          sparklineData={metrics.facilitatorBalances.slice(0, 10).map(f => f.balance)}
         />
 
         <StatCard
@@ -303,6 +387,7 @@ export function Overview() {
           subtitle={networks[0]?.currency || 'ETH'}
           icon={<Wallet className="h-4 w-4" />}
           iconClassName="p-2 bg-teal-500/10 text-teal-500"
+          comparison={{ value: `${networks.length} networks`, label: 'Across' }}
         />
 
         <StatCard
@@ -312,6 +397,7 @@ export function Overview() {
           trend={txCountTrend}
           icon={<HugeiconsIcon icon={Coins01Icon} className="h-4 w-4" strokeWidth={2} />}
           iconClassName="p-2 bg-cyan-500/10 text-cyan-500"
+          sparklineData={hourlyTxData}
         />
 
         <StatCard
@@ -321,93 +407,104 @@ export function Overview() {
           trend={gasSpentTrend}
           icon={<HugeiconsIcon icon={Fire02Icon} className="h-4 w-4" strokeWidth={2} />}
           iconClassName="p-2 bg-orange-500/10 text-orange-500"
+          comparison={{ value: `${parseFloat(formatEther(avgGasPerTx)).toFixed(6)} avg/tx`, label: '' }}
+        />
+
+        <StatCard
+          title="Token Transfers"
+          value={totalTokenTransfers}
+          subtitle={`${tokenStats.length} unique tokens`}
+          icon={<HugeiconsIcon icon={CoinsDollarIcon} className="h-4 w-4" strokeWidth={2} />}
+          iconClassName="p-2 bg-pink-500/10 text-pink-500"
+        />
+
+        <StatCard
+          title="Avg Gas Price"
+          value={networks.length > 0 && Object.values(gasPrices).length > 0
+            ? `${(Object.values(gasPrices).reduce((sum, p) => sum + parseFloat(formatGwei(BigInt(p))), 0) / Object.values(gasPrices).length).toFixed(1)}`
+            : '--'}
+          subtitle="Gwei"
+          icon={<Zap className="h-4 w-4" />}
+          iconClassName="p-2 bg-yellow-500/10 text-yellow-500"
+        />
+
+        <StatCard
+          title="Avg Tx Value"
+          value={filteredTxs.length > 0
+            ? formatCompact(filteredTxs.reduce((sum, tx) => sum + parseFloat(formatEther(BigInt(tx.value))), 0) / filteredTxs.length)
+            : '0'}
+          subtitle={networks[0]?.currency || 'ETH'}
+          icon={<TrendingUp className="h-4 w-4" />}
+          iconClassName="p-2 bg-emerald-500/10 text-emerald-500"
+        />
+
+        <StatCard
+          title="Peak Hour"
+          value={peakHour.count > 0 ? `${peakHour.hour.toString().padStart(2, '0')}:00` : '--'}
+          subtitle={peakHour.count > 0 ? `${peakHour.count} transactions` : 'No data'}
+          icon={<HugeiconsIcon icon={Clock01Icon} className="h-4 w-4" strokeWidth={2} />}
+          iconClassName="p-2 bg-indigo-500/10 text-indigo-500"
         />
       </div>
 
-      {/* Secondary Stats Row */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-muted-foreground font-medium">Token Transfers</p>
-              <p className="text-xl font-bold mt-1">{totalTokenTransfers}</p>
+      {/* Network Distribution & Activity Heatmap */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Network Distribution Bar */}
+        {networks.length > 0 && (
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium flex items-center gap-2">
+                <div className="p-1.5 bg-cyan-500/10">
+                  <Globe className="h-3.5 w-3.5 text-cyan-500" />
+                </div>
+                Network Distribution
+              </h3>
+              <span className="text-xs text-muted-foreground">{filteredTxs.length} transactions</span>
             </div>
-            <div className="p-2 bg-pink-500/10">
-              <HugeiconsIcon icon={CoinsDollarIcon} className="h-4 w-4 text-pink-500" />
-            </div>
-          </div>
-        </Card>
+            {networkDistribution.some(n => n.value > 0) ? (
+              <>
+                <StackedBar segments={networkDistribution} height={12} />
+                <div className="flex flex-wrap gap-4 mt-3">
+                  {networkDistribution.filter(n => n.value > 0).map((n) => (
+                    <button
+                      key={n.id}
+                      onClick={() => setSelectedNetwork(selectedNetwork === n.id ? null : n.id)}
+                      className={`flex items-center gap-1.5 text-xs hover:opacity-80 transition-opacity ${
+                        selectedNetwork === n.id ? 'ring-2 ring-primary ring-offset-2 ring-offset-background px-1' : ''
+                      }`}
+                    >
+                      <span className="w-2.5 h-2.5" style={{ backgroundColor: n.color }} />
+                      <span className="text-muted-foreground">{n.label}</span>
+                      <span className="font-mono font-medium">{n.value}</span>
+                      <span className="text-muted-foreground text-[10px]">
+                        ({((n.value / filteredTxs.length) * 100).toFixed(0)}%)
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-24 text-muted-foreground text-sm border border-dashed">
+                No transactions in this period
+              </div>
+            )}
+          </Card>
+        )}
 
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-muted-foreground font-medium">Active Networks</p>
-              <p className="text-xl font-bold mt-1">{networks.length}</p>
-            </div>
-            <div className="p-2 bg-cyan-500/10">
-              <Globe className="h-4 w-4 text-cyan-500" />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-muted-foreground font-medium">Avg Gas Price</p>
-              <p className="text-xl font-bold mt-1">
-                {networks.length > 0 && Object.values(gasPrices).length > 0
-                  ? `${(Object.values(gasPrices).reduce((sum, p) => sum + parseFloat(formatGwei(BigInt(p))), 0) / Object.values(gasPrices).length).toFixed(1)} Gwei`
-                  : '--'}
-              </p>
-            </div>
-            <div className="p-2 bg-yellow-500/10">
-              <Zap className="h-4 w-4 text-yellow-500" />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-muted-foreground font-medium">Avg Tx Value</p>
-              <p className="text-xl font-bold mt-1">
-                {filteredTxs.length > 0
-                  ? formatCompact(filteredTxs.reduce((sum, tx) => sum + parseFloat(formatEther(BigInt(tx.value))), 0) / filteredTxs.length)
-                  : '0'}
-              </p>
-            </div>
-            <div className="p-2 bg-emerald-500/10">
-              <TrendingUp className="h-4 w-4 text-emerald-500" />
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Network Distribution Bar */}
-      {networks.length > 1 && networkDistribution.some(n => n.value > 0) && (
+        {/* Activity Heatmap */}
         <Card className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium">Network Distribution</h3>
-            <span className="text-xs text-muted-foreground">{filteredTxs.length} transactions</span>
+            <h3 className="text-sm font-medium flex items-center gap-2">
+              <div className="p-1.5 bg-teal-500/10">
+                <HugeiconsIcon icon={ChartLineData01Icon} className="h-3.5 w-3.5 text-teal-500" />
+              </div>
+              Weekly Activity
+            </h3>
+            <span className="text-xs text-muted-foreground">Last 7 days</span>
           </div>
-          <StackedBar segments={networkDistribution} height={10} />
-          <div className="flex flex-wrap gap-4 mt-3">
-            {networkDistribution.filter(n => n.value > 0).map((n) => (
-              <button
-                key={n.id}
-                onClick={() => setSelectedNetwork(selectedNetwork === n.id ? null : n.id)}
-                className={`flex items-center gap-1.5 text-xs hover:opacity-80 transition-opacity ${
-                  selectedNetwork === n.id ? 'ring-2 ring-primary ring-offset-2 ring-offset-background px-1' : ''
-                }`}
-              >
-                <span className="w-2.5 h-2.5 " style={{ backgroundColor: n.color }} />
-                <span className="text-muted-foreground">{n.label}</span>
-                <span className="font-mono font-medium">{n.value}</span>
-              </button>
-            ))}
-          </div>
+          <ActivityHeatmap data={activityHeatmapData} />
         </Card>
-      )}
+      </div>
 
       {/* Main Charts Row */}
       <div className="grid gap-4 lg:grid-cols-7">

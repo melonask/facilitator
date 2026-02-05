@@ -1,6 +1,6 @@
 {
   "name": "facilitator",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "private": true,
   "type": "module",
   "description": "Self-hosted x402 payment facilitator server — verifies and settles any ERC-20 token (USDT, DAI, etc.)",
