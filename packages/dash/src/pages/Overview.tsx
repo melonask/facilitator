@@ -548,10 +548,12 @@ export function Overview() {
                     <YAxis yAxisId="right" orientation="right" stroke="#06b6d4" fontSize={11} tickFormatter={(v) => v.toFixed(3)} />
                     <Tooltip
                       labelFormatter={(ts) => new Date(ts).toLocaleString([], { hour12: false })}
-                      formatter={(value: number, name: string) => {
-                        if (name === 'gasSpent') return [value.toFixed(6), 'Gas (ETH)'];
+                      /* eslint-disable @typescript-eslint/no-explicit-any */
+                      formatter={((value: any, name: string) => {
+                        if (name === 'gasSpent') return [typeof value === 'number' ? value.toFixed(6) : String(value), 'Gas (ETH)'];
                         return [value, name === 'count' ? 'Transactions' : name];
-                      }}
+                      }) as any}
+                      /* eslint-enable @typescript-eslint/no-explicit-any */
                       cursor={{ fill: 'var(--muted)', opacity: 0.1 }}
                       {...tooltipStyles}
                     />

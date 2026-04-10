@@ -1,16 +1,27 @@
 # dependencies
-node_modules
+node_modules/
 
-# output
+# build output
+**/dist/
+dist-ssr/
+cache
+out
+
+# package archives
 *.tgz
 
-# coverage
-coverage
+# test coverage
+coverage/
 *.lcov
 
 # logs
-logs
+logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
 # env files
 .env
@@ -19,15 +30,27 @@ logs
 
 # caches
 .eslintcache
-.cache
+.cache/
 *.tsbuildinfo
 
-# foundry
-cache/
+# foundry (contracts)
+packages/contracts/cache/
+packages/contracts/broadcast/
+packages/contracts/docs/
+packages/contracts/out/
+!packages/contracts/out/Delegate.sol
+!packages/contracts/out/EIP3009Mock.sol
+!packages/contracts/out/ERC20Mock.sol
 
 # editors
-.idea
-.vscode
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
 # os
 .DS_Store

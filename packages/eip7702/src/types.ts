@@ -68,6 +68,6 @@ export enum ErrorReason {
 }
 
 export interface NonceManager {
-  checkAndMark(nonce: string): boolean;
-  has(nonce: string): boolean;
+  checkAndMark(nonce: string): boolean | Promise<boolean>;
+  has(nonce: string): boolean | Promise<boolean>;
 }

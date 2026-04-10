@@ -1,0 +1,23 @@
+{
+  "skill_name": "x402-facilitator",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I run a weather API on Express (Node.js). I want to start charging $0.01 per request in USDC on Base. My wallet is 0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B. Can you help me set that up?",
+      "expected_output": "Should guide the user through adding @x402/express middleware with the 'exact' scheme on eip155:8453, including payment requirements with USDC asset address on Base and the user's payTo address. Should mention they can use the public Coinbase CDP facilitator since they only need USDC/exact scheme.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "I'm building an AI agent that needs to pay for data from other agents. I want it to be able to pay with USDT on Base using EIP-7702. I have a private key for the agent's wallet. How do I set up the client side?",
+      "expected_output": "Should guide through installing @x402/fetch and viem, implementing a SchemeNetworkClient for the eip7702 scheme that signs PaymentIntent typed data + EIP-7702 authorization, using the Delegate contract address on Base, and wrapping fetch with wrapFetchWithPaymentFromConfig. Should mention the EIP-712 domain uses the buyer's address as verifyingContract.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I want to accept USDT payments on my API running on Polygon. I don't want to use Coinbase's facilitator — I want to self-host. I need the facilitator to survive restarts. I have a relayer private key and a Postgres database at postgres://facilitator:secret@db.example.com:5432/facilitator. Walk me through the full setup including the facilitator server and the server-side payment verification.",
+      "expected_output": "Should cover: (1) verifying Delegate.sol is deployed on Polygon (address 0xD064939e...) or deploying it, (2) starting @facilitator/server with --relayer-key, --chain 137=<rpc>, --db <postgres-url>, (3) explaining the database tables (used_nonces + settlements), (4) adding seller-side code that returns 402 with eip7702 scheme payment requirements and calls /verify + /settle on the self-hosted facilitator. Should mention funding the relayer wallet with POL (ex. MATIC) for gas.",
+      "files": []
+    }
+  ]
+}

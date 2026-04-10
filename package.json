@@ -1,6 +1,6 @@
 {
   "name": "facilitator",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "Self-hosted x402 payment facilitator server — verifies and settles any ERC-20 token (USDT, DAI, etc.)",
@@ -27,12 +27,13 @@
     "test:contracts": "cd packages/contracts && forge test -vv",
     "build:contracts": "cd packages/contracts && forge build",
     "typecheck": "npm run typecheck --workspaces",
+    "clean": "rm -rf node_modules package-lock.json && npm run clean --workspaces",
     "demo": "node packages/demo/dist/bin/demo.js",
     "dash": "node packages/dash/bin/dash.js"
   },
   "devDependencies": {
-    "@types/node": "^25.2.0",
+    "@types/node": "^25.6.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.2"
   }
 }
