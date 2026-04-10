@@ -35,6 +35,8 @@ export const KNOWN_DELEGATE_ADDRESSES: Record<number, Address> = {
   43114: "0xD064939e706dC03699dB7Fe58bB0553afDF39fDd", // Avalanche
 };
 
+export const KNOWN_CHAIN_IDS = Object.keys(KNOWN_DELEGATE_ADDRESSES).map(Number);
+
 /** Grace buffer (seconds) to account for latency between verify and on-chain execution. */
 const EXPIRY_GRACE_SECONDS = 6;
 
@@ -299,12 +301,14 @@ export class Eip7702Mechanism implements SchemeNetworkFacilitator {
         return { isValid: false, invalidReason: ErrorReason.Expired };
       }
 
+      const nonceKey = `${chainId}:${signer}:${intent.nonce}`;
+
       if (consumeNonce) {
-        if (!this.config.nonceManager.checkAndMark(intent.nonce.toString())) {
+        if (!(await this.config.nonceManager.checkAndMark(nonceKey))) {
           return { isValid: false, invalidReason: ErrorReason.NonceUsed };
         }
       } else {
-        if (this.config.nonceManager.has(intent.nonce.toString())) {
+        if (await this.config.nonceManager.has(nonceKey)) {
           return { isValid: false, invalidReason: ErrorReason.NonceUsed };
         }
       }

@@ -379,14 +379,16 @@ export function Facilitators() {
                       labelFormatter={(ts) =>
                         new Date(ts).toLocaleString([], { hour12: false })
                       }
-                      formatter={(value: number, name: string) => {
+                      /* eslint-disable @typescript-eslint/no-explicit-any */
+                      formatter={((value: any, name: string) => {
                         if (name === "balanceEth")
                           return [
-                            value.toFixed(6),
+                            typeof value === "number" ? value.toFixed(6) : String(value),
                             `Balance (${net?.currency})`,
                           ];
                         return [value, "Tx Count"];
-                      }}
+                      }) as any}
+                      /* eslint-enable @typescript-eslint/no-explicit-any */
                       contentStyle={{
                         backgroundColor: "var(--card)",
                         borderColor: "var(--border)",

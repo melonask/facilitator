@@ -64,7 +64,7 @@ Then in a new terminal, run the facilitator command printed by the demo:
 npx @facilitator/server \
     --relayer-key 0x... \
     --delegate-address 0x... \
-    --rpc-url http://127.0.0.1:8545
+    --chain 31337=http://127.0.0.1:8545
 ```
 
 Open `http://localhost:3030` and click **INITIATE**.
@@ -89,35 +89,75 @@ forge \
 
 2. **Run the facilitator**:
 
-**Multi-Chain:**
+**All known chains (default):**
 
 ```bash
-npx @facilitator/server \
-  --relayer-key 0x... \
-  --chain 1=https://,https:// \
-  --chain 137=https://polygon-rpc.com
+npx @facilitator/server --relayer-key 0x...
 ```
 
-**Single-Chain:**
+This enables Ethereum, Optimism, BNB Chain, Polygon, Base, Arbitrum, and Avalanche with default public RPCs.
+
+**Specific chains:**
+
+Three `--chain` formats are supported:
 
 ```bash
-npx @facilitator/server \
-  --relayer-key 0x... \
-  --rpc-url https://...
+# Chain ID with custom RPC
+--chain 8453=https://mainnet.base.org
+
+# Custom RPC only (chain ID auto-detected)
+--chain https://mainnet.base.org
+
+# Chain ID only (uses default public RPC)
+--chain 8453
 ```
 
 The server automatically resolves the `Delegate.sol` address for known networks (Ethereum, Polygon, Base, Optimism, Arbitrum, BNB Chain, Avalanche). For custom deployments, pass `--delegate-address 0x...` explicitly.
+
+### Database
+
+By default, nonce state and settlement history are stored in memory and lost on restart. To persist them, use `--db`:
+
+**SQLite (local file):**
+
+```bash
+npx @facilitator/server \
+  --relayer-key 0x... \
+  --db ./facilitator.db
+```
+
+**PostgreSQL (connection string):**
+
+```bash
+npx @facilitator/server \
+  --relayer-key 0x... \
+  --db postgres://user:pass@localhost:5432/facilitator
+```
+
+**PostgreSQL (environment variables):**
+
+```bash
+PGHOST=localhost PGDATABASE=facilitator PGUSER=postgres PGPASSWORD=secret \
+  npx @facilitator/server \
+  --relayer-key 0x...
+```
+
+You can also use `DATABASE_URL` instead of the individual `PG*` variables. Tables are created automatically on startup.
+
+> **Note:** Without `--db` or PG environment variables, the server falls back to an in-memory store with a warning on startup. This is fine for testing but not recommended for production — nonce replay protection and settlement records will be lost on restart.
 
 ## API
 
 TypeScript server HTTP API:
 
-| Endpoint       | Method | Description                                          |
-| -------------- | ------ | ---------------------------------------------------- |
-| `/verify`      | `POST` | Verify a signed payment (read-only, no state change) |
-| `/settle`      | `POST` | Verify + submit Type 4 transaction on-chain          |
-| `/supported`   | `GET`  | List supported schemes, networks, and signers        |
-| `/healthcheck` | `GET`  | Server health status                                 |
+| Endpoint       | Method | Description                                                               |
+| -------------- | ------ | ------------------------------------------------------------------------- |
+| `/verify`      | `POST` | Verify a signed payment (read-only, no state change)                      |
+| `/settle`      | `POST` | Verify + submit Type 4 transaction on-chain                               |
+| `/supported`   | `GET`  | List supported schemes, networks, and signers                             |
+| `/healthcheck` | `GET`  | Server health status                                                      |
+| `/info`        | `GET`  | Relayer ETH balance per chain                                             |
+| `/settlements` | `GET`  | Query settlement history (requires `?payer=0x...`; optional `&chainId=1`) |
 
 Request body for `/verify` and `/settle`:
 
@@ -176,6 +216,20 @@ This facilitator supports **both** mechanisms simultaneously:
 | **Smart wallets** | Requires EIP-6492 for counterfactual                | Direct EOA delegation          |
 | **Gas**           | Relayer pays gas                                    | Relayer pays gas               |
 | **Chain support** | Chains with USDC deployment                         | Any EVM chain with EIP-7702    |
+
+## Agent SKILL x402 facilitator
+
+<img src="https://raw.githubusercontent.com/melonask/facilitator/refs/heads/main/packages/demo/public/agent.png" alt="x402 EIP-7702 Facilitator Opencode/Gemini/Codex/Claude Agent">
+
+- Add a skill to your agent.
+
+```bash
+npx skills add melonask/facilitator
+```
+
+- Ask AI agent to create a x402 project.
+
+> **/x402-facilitator** `"Create an image generation API using the OpenRouter API model black-forest-labs/flux.2-klein-4b, with a fee of 0.1 USDT per request via the x402 protocol. For testing, create an agent that will purchase image generation via the API, and test it on the live Foundry Anvil blockchain. Create the UI/UX for this project and for tracking balances."`
 
 ## License
 

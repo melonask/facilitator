@@ -16,7 +16,7 @@ export class MultiChainClientProvider {
 
   constructor(private account: Account) {}
 
-  addChain(chainId: number, rpcUrls: string[]) {
+  addChain(chainId: number, rpcUrls: readonly string[], nativeCurrency?: { name: string; symbol: string; decimals: number }) {
     if (rpcUrls.length === 0) {
       throw new Error(`No RPC URLs provided for chain ${chainId}`);
     }
@@ -27,8 +27,8 @@ export class MultiChainClientProvider {
     const chain = defineChain({
       id: chainId,
       name: `Chain ${chainId}`,
-      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-      rpcUrls: { default: { http: rpcUrls } },
+      nativeCurrency: nativeCurrency ?? { name: "Ether", symbol: "ETH", decimals: 18 },
+      rpcUrls: { default: { http: [...rpcUrls] } },
     });
 
     const publicClient = createPublicClient({ chain, transport });

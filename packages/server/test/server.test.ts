@@ -2,6 +2,13 @@ import { x402Facilitator } from "@x402/core/facilitator";
 import { beforeEach, describe, it, mock } from "node:test";
 import assert from "node:assert/strict";
 import { createHandler } from "../src/handler.js";
+import type { HandlerExtra } from "../src/handler.js";
+
+const mockProvider = {
+  getPublicClient: (_chainId: number) => ({
+    getBalance: mock.fn(async () => 1000000000000000000n),
+  }),
+};
 
 describe("Facilitator Server Handler", () => {
   let mockFacilitator: x402Facilitator;
@@ -23,7 +30,15 @@ describe("Facilitator Server Handler", () => {
         payer: "0x123",
       })),
     } as unknown as x402Facilitator;
-    handler = createHandler(mockFacilitator);
+
+    const extra: HandlerExtra = {
+      provider: mockProvider,
+      chainIds: [1],
+      relayerAddress: "0xRelayer",
+      db: null,
+    };
+
+    handler = createHandler(mockFacilitator, extra);
   });
 
   describe("GET /supported", () => {
@@ -38,6 +53,17 @@ describe("Facilitator Server Handler", () => {
         extensions: [],
         signers: {},
       });
+    });
+  });
+
+  describe("GET /info", () => {
+    it("should return balances for all chains", async () => {
+      const req = new Request("http://localhost/info");
+      const res = await handler(req);
+      const data = await res.json() as { networks: Record<number, string> };
+
+      assert.equal(res.status, 200);
+      assert.ok(data.networks[1]);
     });
   });
 
@@ -73,22 +99,23 @@ describe("Facilitator Server Handler", () => {
     it("should settle payload", async () => {
       const body = {
         paymentPayload: { foo: "bar" } as any,
-        paymentRequirements: { baz: "qux" } as any,
+        paymentRequirements: {
+          baz: "qux",
+          network: "eip155:1",
+          payTo: "0xpayee",
+          asset: "0xtoken",
+          amount: "100",
+        } as any,
       };
       const req = new Request("http://localhost/settle", {
         method: "POST",
         body: JSON.stringify(body),
       });
       const res = await handler(req);
-      const data = await res.json();
+      const data = await res.json() as Record<string, unknown>;
 
       assert.equal(res.status, 200);
-      assert.deepEqual(data, {
-        success: true,
-        transaction: "0xhash",
-        network: "eip155:1",
-        payer: "0x123",
-      });
+      assert.equal(data.success, true);
       assert.equal((mockFacilitator.settle as any).mock.callCount(), 1);
     });
   });

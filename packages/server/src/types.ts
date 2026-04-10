@@ -1,4 +1,1 @@
-export interface NonceManager {
-  checkAndMark(nonce: string): boolean;
-  has(nonce: string): boolean;
-}
+export type { NonceManager } from "@facilitator/eip7702";
