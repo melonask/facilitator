@@ -109,7 +109,18 @@ export function createHandler(
           ? await findExistingSettlement(body.paymentPayload, body.paymentRequirements, settlementStore)
           : null;
 
-        if (existing && existing.status === "confirmed") {
+        // Only reuse a cached settlement when it was actually confirmed for
+        // THIS SAME payee/token/amount. The nonce+chain lookup alone isn't
+        // enough: without this check, any already-confirmed nonce could be
+        // replayed against different payment requirements and still come
+        // back as success.
+        if (
+          existing &&
+          existing.status === "confirmed" &&
+          existing.payee.toLowerCase() === body.paymentRequirements.payTo.toLowerCase() &&
+          existing.token.toLowerCase() === body.paymentRequirements.asset.toLowerCase() &&
+          existing.amount === body.paymentRequirements.amount
+        ) {
           return Response.json(
             {
               success: true,
@@ -168,7 +179,7 @@ async function findExistingSettlement(
   payload: PaymentPayload,
   requirements: PaymentRequirements,
   store: SettlementStore,
-): Promise<{ txHash: string; status: string; payer: string } | null> {
+): Promise<{ txHash: string; status: string; payer: string; payee: string; token: string; amount: string } | null> {
   try {
     const p = payload as Record<string, unknown>;
     const inner = p.payload as Record<string, unknown> | undefined;
@@ -182,7 +193,14 @@ async function findExistingSettlement(
     const record = await store.findByNonceAndChain(nonce, chainId);
     if (!record) return null;
 
-    return { txHash: record.txHash, status: record.status, payer: record.payer };
+    return {
+      txHash: record.txHash,
+      status: record.status,
+      payer: record.payer,
+      payee: record.payee,
+      token: record.token,
+      amount: record.amount,
+    };
   } catch {
     return null;
   }
